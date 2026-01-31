@@ -1,7 +1,20 @@
-const yearRange = document.getElementById("yearRange");
-const yearValue = document.getElementById("yearValue");
+const periodRange = document.getElementById("periodRange");
+const periodValue = document.getElementById("periodValue");
 const panelTitle = document.getElementById("panelTitle");
 const panelBody = document.getElementById("panelBody");
+
+// 9 discrete periods
+const periods = [
+  { label: "1st Crusade", start: 1096, end: 1099 },
+  { label: "2nd Crusade", start: 1147, end: 1149 },
+  { label: "3rd Crusade", start: 1189, end: 1192 },
+  { label: "4th Crusade", start: 1202, end: 1204 },
+  { label: "5th Crusade", start: 1217, end: 1221 },
+  { label: "6th Crusade", start: 1228, end: 1229 },
+  { label: "7th Crusade", start: 1248, end: 1254 },
+  { label: "8th Crusade", start: 1270, end: 1270 },
+  { label: "Post-Crusades", start: 1270, end: 1360 } // “a bit past 1350”
+];
 
 let dataset = null;
 let map = null;
@@ -30,7 +43,8 @@ function clearLayers() {
   routesLayer.clearLayers();
 }
 
-function drawForYear(year) {
+// unchanged core logic, but we’ll pass it the selected period end year
+function drawForYear(year, periodLabel = null, periodStart = null, periodEnd = null) {
   if (!dataset) return;
 
   clearLayers();
@@ -49,10 +63,14 @@ function drawForYear(year) {
       });
 
       marker.on("click", () => {
+        const heading = periodLabel
+          ? `${periodLabel} (${periodStart}–${periodEnd})`
+          : `Up to ${year}`;
+
         setPanel(
           artifact.title,
           `
-            <p><strong>Selected year:</strong> ${year}</p>
+            <p><strong>Selected period:</strong> ${heading}</p>
             <p><strong>Event:</strong> ${e.type} — <strong>${e.place}</strong> (${e.year})</p>
             <p>${e.note}</p>
             <hr />
@@ -82,15 +100,22 @@ async function loadData() {
   dataset = await res.json();
 }
 
-function updateYearUI(year) {
-  yearValue.textContent = String(year);
+function updatePeriodUI(index) {
+  const p = periods[index];
+  periodValue.textContent = `${p.label} (${p.start}–${p.end})`;
+}
+
+// Convert slider index -> period end year and redraw
+function applyPeriod(index) {
+  const p = periods[index];
+  updatePeriodUI(index);
+  drawForYear(p.end, p.label, p.start, p.end);
 }
 
 function wireControls() {
-  yearRange.addEventListener("input", (e) => {
-    const year = Number(e.target.value);
-    updateYearUI(year);
-    drawForYear(year);
+  periodRange.addEventListener("input", (e) => {
+    const idx = Number(e.target.value);
+    applyPeriod(idx);
   });
 }
 
@@ -100,9 +125,8 @@ function wireControls() {
 
   try {
     await loadData();
-    const initialYear = Number(yearRange.value);
-    updateYearUI(initialYear);
-    drawForYear(initialYear);
+    const initialIdx = Number(periodRange.value);
+    applyPeriod(initialIdx);
   } catch (err) {
     setPanel("Error", `<p>${err.message}</p>`);
     console.error(err);
