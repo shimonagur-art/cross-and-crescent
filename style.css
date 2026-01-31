@@ -61,15 +61,20 @@ body {
   text-align: center;
   padding: 6px 4px;
   border-bottom: 2px solid transparent;
-
-  /* clickable affordance */
-  cursor: pointer;
   border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
 }
 
-/* subtle hover state */
+/* Hover */
 .bands span:hover {
   background: #f5f5f5;
+}
+
+/* Keyboard focus */
+.bands span:focus {
+  outline: 2px solid #111;
+  outline-offset: 2px;
 }
 
 /* Title line */
