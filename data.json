@@ -1,0 +1,35 @@
+{
+  "artifacts": [
+    {
+      "id": "italy_1100_demo",
+      "title": "Italian Object (c.1100)",
+      "summary": "Demo artefact showing a chain of influence over time.",
+      "events": [
+        {
+          "type": "origin",
+          "year": 1100,
+          "place": "Italy",
+          "lat": 43.7696,
+          "lng": 11.2558,
+          "note": "Created in Italy (approx.)."
+        },
+        {
+          "type": "influence",
+          "year": 1250,
+          "place": "France",
+          "lat": 48.8566,
+          "lng": 2.3522,
+          "note": "Motifs appear in French works (approx.)."
+        },
+        {
+          "type": "influence",
+          "year": 1350,
+          "place": "England",
+          "lat": 51.5072,
+          "lng": -0.1276,
+          "note": "Later adoption in England (approx.)."
+        }
+      ]
+    }
+  ]
+}
