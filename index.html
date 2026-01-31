@@ -18,21 +18,27 @@
       <p>Drag the year to filter influence/movement events.</p>
     </div>
 
-    <div class="timeline">
-      <label for="yearRange"><strong>Year:</strong> <span id="yearValue">1250</span></label>
-      <input id="yearRange" type="range" min="1096" max="1350" value="1250" step="1" />
-      <div class="bands" aria-hidden="true">
-        <span>1st 1096–1099</span>
-        <span>2nd 1147–1149</span>
-        <span>3rd 1189–1192</span>
-        <span>4th 1202–1204</span>
-        <span>5th 1217–1221</span>
-        <span>6th 1228–1229</span>
-        <span>7th 1248–1254</span>
-        <span>8th 1270</span>
-        <span>Post 1270–1350</span>
-      </div>
-    </div>
+ <div class="timeline">
+  <label for="periodRange">
+    <strong>Period:</strong>
+    <span id="periodValue">7th Crusade (1248–1254)</span>
+  </label>
+
+  <!-- Discrete slider: 0..8 -->
+  <input id="periodRange" type="range" min="0" max="8" value="6" step="1" />
+
+  <div class="bands" aria-hidden="true">
+    <span>1st</span>
+    <span>2nd</span>
+    <span>3rd</span>
+    <span>4th</span>
+    <span>5th</span>
+    <span>6th</span>
+    <span>7th</span>
+    <span>8th</span>
+    <span>Post</span>
+  </div>
+</div>
   </header>
 
   <main class="layout">
