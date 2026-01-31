@@ -42,26 +42,60 @@ body {
   gap: 8px; 
 }
 
-/* Discrete period slider */
 #periodRange { 
   width: 100%; 
 }
 
-/* Period labels spread evenly under slider */
+/* Period labels (2 lines) spread evenly under slider */
 .bands {
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   gap: 8px;
   margin-top: 6px;
-  color: #666;
   font-size: 11px;
-  line-height: 1.2;
+  line-height: 1.25;
+  color: #666;
 }
 
 .bands span {
   text-align: center;
-  white-space: normal;
-  word-break: break-word;
+  padding: 6px 4px;
+  border-bottom: 2px solid transparent;
+
+  /* clickable affordance */
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+/* subtle hover state */
+.bands span:hover {
+  background: #f5f5f5;
+}
+
+/* Title line */
+.bands strong {
+  display: block;
+  font-weight: 500;
+}
+
+/* Year range line */
+.bands em {
+  display: block;
+  font-style: normal;
+  font-size: 10px;
+  color: #888;
+}
+
+/* Active period highlight */
+.bands span.active {
+  color: #111;
+  font-weight: 700;
+  border-bottom-color: #111;
+  background: #f0f0f0;
+}
+
+.bands span.active em {
+  color: #111;
 }
 
 /* ================= Layout ================= */
@@ -135,11 +169,9 @@ body {
     height: 55vh; 
   }
 
-  /* Stack long period labels nicely on small screens */
+  /* Stack labels on small screens */
   .bands {
     grid-template-columns: repeat(3, 1fr);
     row-gap: 8px;
-    font-size: 11px;
   }
 }
-
