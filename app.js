@@ -123,13 +123,26 @@ function wireControls() {
     const idx = Number(e.target.value);
     applyPeriod(idx);
   });
+}
 
-  // Clickable labels under slider
-  document.querySelectorAll(".bands span").forEach((el) => {
-    el.addEventListener("click", () => {
+function wireBands() {
+  const bandEls = document.querySelectorAll(".bands span");
+  bandEls.forEach((el) => {
+    const activate = () => {
       const idx = Number(el.dataset.index);
       periodRange.value = String(idx);
       applyPeriod(idx);
+    };
+
+    // Mouse click
+    el.addEventListener("click", activate);
+
+    // Keyboard accessibility: Enter / Space
+    el.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        activate();
+      }
     });
   });
 }
@@ -137,6 +150,7 @@ function wireControls() {
 (async function main() {
   initMap();
   wireControls();
+  wireBands();
 
   try {
     await loadData();
@@ -147,3 +161,4 @@ function wireControls() {
     console.error(err);
   }
 })();
+
