@@ -92,15 +92,16 @@ body {
 }
 
 /* Active period highlight */
+/* Active period highlight — colour instead of frame */
 .bands span.active {
-  color: #111;
+  color: #0b4f6c;                 /* deep blue text */
   font-weight: 700;
-  border-bottom-color: #111;
-  background: #f0f0f0;
+  background: #e6f2fa;            /* light blue highlight */
+  border-bottom-color: transparent;
 }
 
 .bands span.active em {
-  color: #111;
+  color: #0b4f6c;
 }
 
 /* ================= Layout ================= */
