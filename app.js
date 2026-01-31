@@ -13,7 +13,7 @@ const periods = [
   { label: "6th Crusade", start: 1228, end: 1229 },
   { label: "7th Crusade", start: 1248, end: 1254 },
   { label: "8th Crusade", start: 1270, end: 1270 },
-  { label: "Post-Crusades", start: 1270, end: 1360 } // “a bit past 1350”
+  { label: "Post-Crusades", start: 1270, end: 1360 } // slightly past 1350
 ];
 
 let dataset = null;
@@ -43,7 +43,12 @@ function clearLayers() {
   routesLayer.clearLayers();
 }
 
-// unchanged core logic, but we’ll pass it the selected period end year
+function updateActiveBand(index) {
+  document.querySelectorAll(".bands span").forEach(el => {
+    el.classList.toggle("active", Number(el.dataset.index) === index);
+  });
+}
+
 function drawForYear(year, periodLabel = null, periodStart = null, periodEnd = null) {
   if (!dataset) return;
 
@@ -105,17 +110,27 @@ function updatePeriodUI(index) {
   periodValue.textContent = `${p.label} (${p.start}–${p.end})`;
 }
 
-// Convert slider index -> period end year and redraw
 function applyPeriod(index) {
   const p = periods[index];
   updatePeriodUI(index);
+  updateActiveBand(index);
   drawForYear(p.end, p.label, p.start, p.end);
 }
 
 function wireControls() {
+  // Slider drag
   periodRange.addEventListener("input", (e) => {
     const idx = Number(e.target.value);
     applyPeriod(idx);
+  });
+
+  // Clickable labels under slider
+  document.querySelectorAll(".bands span").forEach((el) => {
+    el.addEventListener("click", () => {
+      const idx = Number(el.dataset.index);
+      periodRange.value = String(idx);
+      applyPeriod(idx);
+    });
   });
 }
 
