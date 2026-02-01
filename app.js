@@ -1,164 +1,194 @@
-const periodRange = document.getElementById("periodRange");
-const periodValue = document.getElementById("periodValue");
-const panelTitle = document.getElementById("panelTitle");
-const panelBody = document.getElementById("panelBody");
+// -----------------------------
+// Cross & Crescent — Objects Map
+// -----------------------------
 
-// 9 discrete periods
-const periods = [
-  { label: "1st Crusade", start: 1096, end: 1099 },
-  { label: "2nd Crusade", start: 1147, end: 1149 },
-  { label: "3rd Crusade", start: 1189, end: 1192 },
-  { label: "4th Crusade", start: 1202, end: 1204 },
-  { label: "5th Crusade", start: 1217, end: 1221 },
-  { label: "6th Crusade", start: 1228, end: 1229 },
-  { label: "7th Crusade", start: 1248, end: 1254 },
-  { label: "8th Crusade", start: 1270, end: 1270 },
-  { label: "Post-Crusades", start: 1270, end: 1360 } // slightly past 1350
-];
+let OBJECTS_DATA = null;
 
-let dataset = null;
-let map = null;
-let markersLayer = null;
-let routesLayer = null;
+const markersLayer = L.layerGroup();
+const routesLayer = L.layerGroup();
 
-function setPanel(title, html) {
-  panelTitle.textContent = title;
-  panelBody.innerHTML = html;
+function inspirationColor(inspiration) {
+  if (inspiration === "christianity") return "#c62828"; // red
+  if (inspiration === "islam") return "#2e7d32";        // green
+  return "#555";
 }
 
-function initMap() {
-  map = L.map("map", { scrollWheelZoom: false }).setView([41.5, 18], 4);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 18,
-    attribution: ""
-  }).addTo(map);
-
-  markersLayer = L.layerGroup().addTo(map);
-  routesLayer = L.layerGroup().addTo(map);
+async function loadObjectsData() {
+  const res = await fetch("data/objects.json");
+  if (!res.ok) throw new Error("Failed to load data/objects.json");
+  return res.json();
 }
 
-function clearLayers() {
+function showObjectDetails(obj, currentEvent) {
+  const el = document.getElementById("details");
+  if (!el) return;
+
+  const images = (obj.images || [])
+    .map(src => `<img src="${src}" alt="${escapeHtml(obj.title)}" loading="lazy" />`)
+    .join("");
+
+  const eventsList = (obj.events || [])
+    .map(e => {
+      const place = e.place?.name ? ` — ${escapeHtml(e.place.name)}` : "";
+      const note = e.note ? `: ${escapeHtml(e.note)}` : "";
+      return `<li><b>${e.year ?? ""}</b> — ${escapeHtml(e.kind)}${place}${note}</li>`;
+    })
+    .join("");
+
+  el.innerHTML = `
+    <div class="panel-inner">
+      <h2>${escapeHtml(obj.title)}</h2>
+      <div class="meta">
+        <span class="pill">${escapeHtml(obj.type || "object")}</span>
+        ${currentEvent?.year ? `<span class="pill">${currentEvent.year}</span>` : ""}
+        ${currentEvent?.place?.name ? `<span class="pill">${escapeHtml(currentEvent.place.name)}</span>` : ""}
+      </div>
+
+      <p class="summary">${escapeHtml(obj.summary || "")}</p>
+      <p class="full">${escapeHtml(obj.fullText || "")}</p>
+
+      ${images ? `<div class="gallery">${images}</div>` : ""}
+
+      <hr />
+      <h3>Events</h3>
+      <ul class="events">${eventsList}</ul>
+    </div>
+  `;
+}
+
+function makeThumbnailIcon(imgSrc, title) {
+  const html = `
+    <div class="obj-marker" title="${escapeHtml(title)}">
+      <img src="${imgSrc}" alt="${escapeHtml(title)}" />
+    </div>
+  `;
+
+  return L.divIcon({
+    className: "obj-marker-wrap",
+    html,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18]
+  });
+}
+
+function renderYear(year, map) {
+  if (!OBJECTS_DATA) return;
+
   markersLayer.clearLayers();
   routesLayer.clearLayers();
-}
 
-function updateActiveBand(index) {
-  document.querySelectorAll(".bands span").forEach(el => {
-    el.classList.toggle("active", Number(el.dataset.index) === index);
-  });
-}
+  const objects = OBJECTS_DATA.objects || [];
+  const byId = Object.fromEntries(objects.map(o => [o.id, o]));
 
-function drawForYear(year, periodLabel = null, periodStart = null, periodEnd = null) {
-  if (!dataset) return;
+  for (const obj of objects) {
+    const allEvents = obj.events || [];
+    const eventsUpToYear = allEvents.filter(e => typeof e.year === "number" && e.year <= year);
+    if (!eventsUpToYear.length) continue;
 
-  clearLayers();
+    // Latest event determines current marker position (up to the selected year)
+    const currentEvent = eventsUpToYear[eventsUpToYear.length - 1];
+    const lat = currentEvent?.place?.lat;
+    const lng = currentEvent?.place?.lng;
+    if (typeof lat !== "number" || typeof lng !== "number") continue;
 
-  dataset.artifacts.forEach((artifact) => {
-    const events = artifact.events
-      .filter(e => e.year <= year)
-      .sort((a, b) => a.year - b.year);
+    // Marker
+    const icon = makeThumbnailIcon(obj.thumbnail, obj.title);
+    const marker = L.marker([lat, lng], { icon }).addTo(markersLayer);
 
-    if (events.length === 0) return;
+    // Hover tooltip (small info)
+    marker.bindTooltip(
+      `<b>${escapeHtml(obj.title)}</b><br>${currentEvent.year} — ${escapeHtml(currentEvent.place.name)}<br>${escapeHtml(obj.summary || "")}`,
+      { direction: "top", sticky: true, opacity: 0.95 }
+    );
 
-    events.forEach((e) => {
-      const marker = L.circleMarker([e.lat, e.lng], {
-        radius: e.type === "origin" ? 8 : 6,
-        weight: 2
-      });
+    // Click -> side panel
+    marker.on("click", () => showObjectDetails(obj, currentEvent));
 
-      marker.on("click", () => {
-        const heading = periodLabel
-          ? `${periodLabel} (${periodStart}–${periodEnd})`
-          : `Up to ${year}`;
+    // Movement routes: connect created/moved places in chronological order up to selected year
+    const placeEvents = eventsUpToYear.filter(e => ["created", "moved"].includes(e.kind) && e.place);
+    for (let i = 1; i < placeEvents.length; i++) {
+      const a = placeEvents[i - 1].place;
+      const b = placeEvents[i].place;
+      if ([a.lat, a.lng, b.lat, b.lng].some(v => typeof v !== "number")) continue;
 
-        setPanel(
-          artifact.title,
-          `
-            <p><strong>Selected period:</strong> ${heading}</p>
-            <p><strong>Event:</strong> ${e.type} — <strong>${e.place}</strong> (${e.year})</p>
-            <p>${e.note}</p>
-            <hr />
-            <p><strong>Artefact summary</strong><br>${artifact.summary}</p>
-            <p><strong>Visible events up to ${year}:</strong></p>
-            <ul>
-              ${events.map(ev => `<li>${ev.year}: ${ev.place} (${ev.type})</li>`).join("")}
-            </ul>
-          `
-        );
-      });
-
-      marker.addTo(markersLayer);
-    });
-
-    if (events.length >= 2) {
-      const latlngs = events.map(e => [e.lat, e.lng]);
-      const line = L.polyline(latlngs, { weight: 3, opacity: 0.8 });
-      line.addTo(routesLayer);
+      L.polyline([[a.lat, a.lng], [b.lat, b.lng]], {
+        color: "#555",
+        weight: 3,
+        dashArray: "2 8",
+        opacity: 0.9
+      }).addTo(routesLayer);
     }
-  });
+
+    // Inspiration routes: source (inspiredBy) -> current object position
+    const inspirations = eventsUpToYear.filter(e => e.kind === "inspired_by" && e.inspiredByObjectId);
+    for (const e of inspirations) {
+      const sourceObj = byId[e.inspiredByObjectId];
+      if (!sourceObj) continue;
+
+      // Find source object position at the inspiration year (or latest <= that year)
+      const srcEvents = (sourceObj.events || []).filter(x => typeof x.year === "number" && x.year <= e.year);
+      if (!srcEvents.length) continue;
+
+      const srcCurrent = srcEvents[srcEvents.length - 1];
+      const s = srcCurrent?.place;
+      if (!s || [s.lat, s.lng].some(v => typeof v !== "number")) continue;
+
+      L.polyline([[s.lat, s.lng], [lat, lng]], {
+        color: inspirationColor(e.inspiration),
+        weight: 3,
+        dashArray: "2 8",
+        opacity: 0.95
+      }).addTo(routesLayer);
+    }
+  }
+
+  // Ensure layers are on map
+  if (!map.hasLayer(routesLayer)) routesLayer.addTo(map);
+  if (!map.hasLayer(markersLayer)) markersLayer.addTo(map);
 }
 
-async function loadData() {
-  const res = await fetch("data.json", { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to load data.json");
-  dataset = await res.json();
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function updatePeriodUI(index) {
-  const p = periods[index];
-  periodValue.textContent = `${p.label} (${p.start}–${p.end})`;
-}
+// -----------------------------
+// Boot
+// -----------------------------
+(async function init() {
+  // Create map
+  const map = L.map("map", { zoomControl: true }).setView([41.9, 12.5], 4);
 
-function applyPeriod(index) {
-  const p = periods[index];
-  updatePeriodUI(index);
-  updateActiveBand(index);
-  drawForYear(p.end, p.label, p.start, p.end);
-}
+  // Tile layer (OpenStreetMap)
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 8,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
 
-function wireControls() {
-  // Slider drag
-  periodRange.addEventListener("input", (e) => {
-    const idx = Number(e.target.value);
-    applyPeriod(idx);
-  });
-}
+  routesLayer.addTo(map);
+  markersLayer.addTo(map);
 
-function wireBands() {
-  const bandEls = document.querySelectorAll(".bands span");
-  bandEls.forEach((el) => {
-    const activate = () => {
-      const idx = Number(el.dataset.index);
-      periodRange.value = String(idx);
-      applyPeriod(idx);
-    };
+  // Load data
+  OBJECTS_DATA = await loadObjectsData();
 
-    // Mouse click
-    el.addEventListener("click", activate);
+  // Slider hookup
+  const slider = document.getElementById("yearSlider");
+  const yearValue = document.getElementById("yearValue");
 
-    // Keyboard accessibility: Enter / Space
-    el.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" || ev.key === " ") {
-        ev.preventDefault();
-        activate();
-      }
+  const startYear = parseInt(slider?.value || "1200", 10);
+  if (yearValue) yearValue.textContent = String(startYear);
+
+  renderYear(startYear, map);
+
+  if (slider) {
+    slider.addEventListener("input", (e) => {
+      const y = parseInt(e.target.value, 10);
+      if (yearValue) yearValue.textContent = String(y);
+      renderYear(y, map);
     });
-  });
-}
-
-(async function main() {
-  initMap();
-  wireControls();
-  wireBands();
-
-  try {
-    await loadData();
-    const initialIdx = Number(periodRange.value);
-    applyPeriod(initialIdx);
-  } catch (err) {
-    setPanel("Error", `<p>${err.message}</p>`);
-    console.error(err);
   }
 })();
-
