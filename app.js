@@ -17,6 +17,8 @@ const periods = [
 ];
 
 let dataset = null;
+let objectsById = new Map();
+
 let map = null;
 let markersLayer = null;
 let routesLayer = null;
@@ -24,6 +26,15 @@ let routesLayer = null;
 function setPanel(title, html) {
   panelTitle.textContent = title;
   panelBody.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function initMap() {
@@ -49,60 +60,16 @@ function updateActiveBand(index) {
   });
 }
 
-function drawForYear(year, periodLabel = null, periodStart = null, periodEnd = null) {
-  if (!dataset) return;
-
-  clearLayers();
-
-  dataset.artifacts.forEach((artifact) => {
-    const events = artifact.events
-      .filter(e => e.year <= year)
-      .sort((a, b) => a.year - b.year);
-
-    if (events.length === 0) return;
-
-    events.forEach((e) => {
-      const marker = L.circleMarker([e.lat, e.lng], {
-        radius: e.type === "origin" ? 8 : 6,
-        weight: 2
-      });
-
-      marker.on("click", () => {
-        const heading = periodLabel
-          ? `${periodLabel} (${periodStart}–${periodEnd})`
-          : `Up to ${year}`;
-
-        setPanel(
-          artifact.title,
-          `
-            <p><strong>Selected period:</strong> ${heading}</p>
-            <p><strong>Event:</strong> ${e.type} — <strong>${e.place}</strong> (${e.year})</p>
-            <p>${e.note}</p>
-            <hr />
-            <p><strong>Artefact summary</strong><br>${artifact.summary}</p>
-            <p><strong>Visible events up to ${year}:</strong></p>
-            <ul>
-              ${events.map(ev => `<li>${ev.year}: ${ev.place} (${ev.type})</li>`).join("")}
-            </ul>
-          `
-        );
-      });
-
-      marker.addTo(markersLayer);
-    });
-
-    if (events.length >= 2) {
-      const latlngs = events.map(e => [e.lat, e.lng]);
-      const line = L.polyline(latlngs, { weight: 3, opacity: 0.8 });
-      line.addTo(routesLayer);
-    }
-  });
-}
-
 async function loadData() {
   const res = await fetch("data.json", { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to load data.json");
   dataset = await res.json();
+
+  if (!dataset.objects || !dataset.events) {
+    throw new Error("data.json must contain { objects: [...], events: [...] }");
+  }
+
+  objectsById = new Map(dataset.objects.map(o => [o.object_id, o]));
 }
 
 function updatePeriodUI(index) {
@@ -110,34 +77,143 @@ function updatePeriodUI(index) {
   periodValue.textContent = `${p.label} (${p.start}–${p.end})`;
 }
 
+function markerRadiusForKind(kind) {
+  const k = String(kind || "").toLowerCase();
+  if (k === "created") return 8;
+  return 6; // inspired_by, moved, influence, etc.
+}
+
+function buildPanelHtml(obj, ev, p, visibleEventsForThisObject) {
+  const title = escapeHtml(obj?.title || obj?.object_id || "Unknown object");
+  const type = escapeHtml(obj?.type || "");
+  const summary = escapeHtml(obj?.summary || "");
+  const note = escapeHtml(ev?.note || "");
+  const place = escapeHtml(ev?.place_name || "");
+  const kind = escapeHtml(ev?.kind || "");
+  const year = escapeHtml(ev?.year || "");
+
+  const thumb = obj?.thumbnail
+    ? `<img class="panelThumb" src="${escapeHtml(obj.thumbnail)}" alt="${title} thumbnail">`
+    : "";
+
+  // Inspired-by link (optional)
+  let inspiredHtml = "";
+  if (ev?.inspired_by_object_id) {
+    const srcObj = objectsById.get(ev.inspired_by_object_id);
+    const srcTitle = srcObj ? srcObj.title : ev.inspired_by_object_id;
+    inspiredHtml = `<p><strong>Inspired by:</strong> ${escapeHtml(srcTitle)} (${escapeHtml(ev.inspired_by_object_id)})</p>`;
+  }
+
+  const inspirationHtml = ev?.inspiration
+    ? `<p><strong>Inspiration:</strong> ${escapeHtml(ev.inspiration)}</p>`
+    : "";
+
+  const tags = Array.isArray(obj?.tags) ? obj.tags : [];
+  const tagsHtml = tags.length
+    ? `<p><strong>Tags:</strong> ${tags.map(t => escapeHtml(String(t).trim())).filter(Boolean).join(", ")}</p>`
+    : "";
+
+  const timelineHtml = visibleEventsForThisObject?.length
+    ? `
+      <p><strong>Visible events up to ${escapeHtml(p.end)}:</strong></p>
+      <ul>
+        ${visibleEventsForThisObject
+          .map(x => `<li>${escapeHtml(x.year)}: ${escapeHtml(x.place_name)} (${escapeHtml(x.kind)})</li>`)
+          .join("")}
+      </ul>
+    `
+    : "";
+
+  return `
+    <p><strong>Selected period:</strong> ${escapeHtml(p.label)} (${p.start}–${p.end})</p>
+    ${thumb}
+    ${type ? `<p><strong>Type:</strong> ${type}</p>` : ""}
+    <p><strong>Event:</strong> ${kind} — <strong>${place}</strong> (${year})</p>
+    ${note ? `<p>${note}</p>` : ""}
+    ${inspiredHtml}
+    ${inspirationHtml}
+    <hr />
+    ${summary ? `<p><strong>Object summary</strong><br>${summary}</p>` : ""}
+    ${tagsHtml}
+    ${timelineHtml}
+  `;
+}
+
+function drawForPeriod(periodIndex) {
+  if (!dataset) return;
+
+  const p = periods[periodIndex];
+  clearLayers();
+
+  // Keep same behaviour as your demo:
+  // show all events up to the period end year (cumulative)
+  const visibleEvents = dataset.events
+    .filter(e => Number(e.year) <= p.end)
+    .filter(e => e.lat != null && e.lng != null);
+
+  if (visibleEvents.length === 0) {
+    setPanel("No events yet", `<p>No mapped events found up to ${escapeHtml(p.end)}.</p>`);
+    return;
+  }
+
+  // Group by object_id
+  const byObject = new Map();
+  for (const ev of visibleEvents) {
+    const id = ev.object_id;
+    if (!byObject.has(id)) byObject.set(id, []);
+    byObject.get(id).push(ev);
+  }
+
+  for (const [objectId, evs] of byObject.entries()) {
+    const obj = objectsById.get(objectId) || { object_id: objectId, title: objectId };
+
+    // Sort by year for routes and timeline
+    evs.sort((a, b) => Number(a.year) - Number(b.year));
+
+    // Markers
+    for (const ev of evs) {
+      const marker = L.circleMarker([Number(ev.lat), Number(ev.lng)], {
+        radius: markerRadiusForKind(ev.kind),
+        weight: 2
+      });
+
+      marker.on("click", () => {
+        setPanel(obj.title || obj.object_id || "Object", buildPanelHtml(obj, ev, p, evs));
+      });
+
+      marker.addTo(markersLayer);
+    }
+
+    // Route line if 2+ visible events for this object
+    if (evs.length >= 2) {
+      const latlngs = evs.map(e => [Number(e.lat), Number(e.lng)]);
+      L.polyline(latlngs, { weight: 3, opacity: 0.8 }).addTo(routesLayer);
+    }
+  }
+}
+
 function applyPeriod(index) {
-  const p = periods[index];
   updatePeriodUI(index);
   updateActiveBand(index);
-  drawForYear(p.end, p.label, p.start, p.end);
+  drawForPeriod(index);
 }
 
 function wireControls() {
-  // Slider drag
   periodRange.addEventListener("input", (e) => {
-    const idx = Number(e.target.value);
-    applyPeriod(idx);
+    applyPeriod(Number(e.target.value));
   });
 }
 
 function wireBands() {
-  const bandEls = document.querySelectorAll(".bands span");
-  bandEls.forEach((el) => {
+  document.querySelectorAll(".bands span").forEach((el) => {
     const activate = () => {
       const idx = Number(el.dataset.index);
       periodRange.value = String(idx);
       applyPeriod(idx);
     };
 
-    // Mouse click
     el.addEventListener("click", activate);
 
-    // Keyboard accessibility: Enter / Space
     el.addEventListener("keydown", (ev) => {
       if (ev.key === "Enter" || ev.key === " ") {
         ev.preventDefault();
@@ -154,10 +230,9 @@ function wireBands() {
 
   try {
     await loadData();
-    const initialIdx = Number(periodRange.value);
-    applyPeriod(initialIdx);
+    applyPeriod(Number(periodRange.value));
   } catch (err) {
-    setPanel("Error", `<p>${err.message}</p>`);
+    setPanel("Error", `<p>${escapeHtml(err.message)}</p>`);
     console.error(err);
   }
 })();
