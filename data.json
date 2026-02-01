@@ -1,35 +1,99 @@
 {
-  "artifacts": [
+  "objects": [
     {
-      "id": "italy_1100_demo",
-      "title": "Italian Object (c.1100)",
-      "summary": "Demo artefact showing a chain of influence over time.",
-      "events": [
-        {
-          "type": "origin",
-          "year": 1100,
-          "place": "Italy",
-          "lat": 43.7696,
-          "lng": 11.2558,
-          "note": "Created in Italy (approx.)."
-        },
-        {
-          "type": "influence",
-          "year": 1250,
-          "place": "France",
-          "lat": 48.8566,
-          "lng": 2.3522,
-          "note": "Motifs appear in French works (approx.)."
-        },
-        {
-          "type": "influence",
-          "year": 1350,
-          "place": "England",
-          "lat": 51.5072,
-          "lng": -0.1276,
-          "note": "Later adoption in England (approx.)."
-        }
+      "object_id": "obj_001",
+      "title": "Object 1",
+      "type": "artifact",
+      "thumbnail": "images/objects/obj_001/object_1_thumbnail.jpg",
+      "images": [
+        "images/objects/obj_001/object_1_image.jpg"
+      ],
+      "summary": "this is object number 1. for test only",
+      "full_text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum",
+      "tags": [
+        "Early Period",
+        "Middle East"
       ]
+    },
+    {
+      "object_id": "obj_002",
+      "title": "Object 2",
+      "type": "artwork",
+      "thumbnail": "images/objects/obj_002/object_2_thumbnail.jpg",
+      "images": [
+        "images/objects/obj_002/object_2_image.jpg"
+      ],
+      "summary": "this is object number 2. for test only",
+      "full_text": "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo",
+      "tags": [
+        "Middle Ages",
+        "Roman Empire"
+      ]
+    },
+    {
+      "object_id": "obj_003",
+      "title": "Object 3",
+      "type": "religious tool",
+      "thumbnail": "images/objects/obj_003/object_3_thumbnail.jpg",
+      "images": [
+        "images/objects/obj_003/object_3_image.jpg"
+      ],
+      "summary": "this is object number 3. for test only",
+      "full_text": "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga",
+      "tags": [
+        "Later Medieval",
+        "North Europe"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "event_id": "ev_01",
+      "object_id": "obj_001",
+      "year": 1099,
+      "kind": "created",
+      "place_name": "Jerusalem",
+      "lat": 31.7683,
+      "lng": 35.2137,
+      "note": "this object was initially created in Jerusalem",
+      "inspired_by_object_id": "",
+      "inspiration": ""
+    },
+    {
+      "event_id": "ev_02",
+      "object_id": "obj_002",
+      "year": 1192,
+      "kind": "created",
+      "place_name": "Rome",
+      "lat": 41.9028,
+      "lng": 12.4964,
+      "note": "this object was initially created in rome",
+      "inspired_by_object_id": "",
+      "inspiration": ""
+    },
+    {
+      "event_id": "ev_03",
+      "object_id": "obj_003",
+      "year": 1270,
+      "kind": "inspired_by",
+      "place_name": "London",
+      "lat": 51.5074,
+      "lng": -0.1278,
+      "note": "Object created in London, inspired by an earlier Jerusalem object",
+      "inspired_by_object_id": "obj_001",
+      "inspiration": "christianity"
+    },
+    {
+      "event_id": "ev_04",
+      "object_id": "obj_003",
+      "year": 1096,
+      "kind": "inspired_by",
+      "place_name": "Jerusalem",
+      "lat": 31.7683,
+      "lng": 35.2137,
+      "note": "inspired",
+      "inspired_by_object_id": "obj_001",
+      "inspiration": "islam"
     }
   ]
 }
