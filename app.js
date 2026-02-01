@@ -19,6 +19,15 @@ async function loadObjectsData() {
   return res.json();
 }
 
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function showObjectDetails(obj, currentEvent) {
   const el = document.getElementById("details");
   if (!el) return;
@@ -38,6 +47,7 @@ function showObjectDetails(obj, currentEvent) {
   el.innerHTML = `
     <div class="panel-inner">
       <h2>${escapeHtml(obj.title)}</h2>
+
       <div class="meta">
         <span class="pill">${escapeHtml(obj.type || "object")}</span>
         ${currentEvent?.year ? `<span class="pill">${currentEvent.year}</span>` : ""}
@@ -63,11 +73,12 @@ function makeThumbnailIcon(imgSrc, title) {
     </div>
   `;
 
+  // IMPORTANT: smaller icon size so markers never explode
   return L.divIcon({
     className: "obj-marker-wrap",
     html,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18]
+    iconSize: [34, 34],
+    iconAnchor: [17, 17]
   });
 }
 
@@ -95,7 +106,7 @@ function renderYear(year, map) {
     const icon = makeThumbnailIcon(obj.thumbnail, obj.title);
     const marker = L.marker([lat, lng], { icon }).addTo(markersLayer);
 
-    // Hover tooltip (small info)
+    // Hover tooltip
     marker.bindTooltip(
       `<b>${escapeHtml(obj.title)}</b><br>${currentEvent.year} — ${escapeHtml(currentEvent.place.name)}<br>${escapeHtml(obj.summary || "")}`,
       { direction: "top", sticky: true, opacity: 0.95 }
@@ -104,7 +115,7 @@ function renderYear(year, map) {
     // Click -> side panel
     marker.on("click", () => showObjectDetails(obj, currentEvent));
 
-    // Movement routes: connect created/moved places in chronological order up to selected year
+    // Movement routes: connect created/moved places up to selected year
     const placeEvents = eventsUpToYear.filter(e => ["created", "moved"].includes(e.kind) && e.place);
     for (let i = 1; i < placeEvents.length; i++) {
       const a = placeEvents[i - 1].place;
@@ -119,13 +130,12 @@ function renderYear(year, map) {
       }).addTo(routesLayer);
     }
 
-    // Inspiration routes: source (inspiredBy) -> current object position
+    // Inspiration routes: source -> current object position
     const inspirations = eventsUpToYear.filter(e => e.kind === "inspired_by" && e.inspiredByObjectId);
     for (const e of inspirations) {
       const sourceObj = byId[e.inspiredByObjectId];
       if (!sourceObj) continue;
 
-      // Find source object position at the inspiration year (or latest <= that year)
       const srcEvents = (sourceObj.events || []).filter(x => typeof x.year === "number" && x.year <= e.year);
       if (!srcEvents.length) continue;
 
@@ -142,28 +152,16 @@ function renderYear(year, map) {
     }
   }
 
-  // Ensure layers are on map
   if (!map.hasLayer(routesLayer)) routesLayer.addTo(map);
   if (!map.hasLayer(markersLayer)) markersLayer.addTo(map);
-}
-
-function escapeHtml(str) {
-  return String(str ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 // -----------------------------
 // Boot
 // -----------------------------
 (async function init() {
-  // Create map
   const map = L.map("map", { zoomControl: true }).setView([41.9, 12.5], 4);
 
-  // Tile layer (OpenStreetMap)
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 8,
     attribution: '&copy; OpenStreetMap contributors'
@@ -172,10 +170,8 @@ function escapeHtml(str) {
   routesLayer.addTo(map);
   markersLayer.addTo(map);
 
-  // Load data
   OBJECTS_DATA = await loadObjectsData();
 
-  // Slider hookup
   const slider = document.getElementById("yearSlider");
   const yearValue = document.getElementById("yearValue");
 
