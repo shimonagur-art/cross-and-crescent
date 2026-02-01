@@ -13,7 +13,7 @@ const periods = [
   { label: "6th Crusade", start: 1228, end: 1229 },
   { label: "7th Crusade", start: 1248, end: 1254 },
   { label: "8th Crusade", start: 1270, end: 1270 },
-  { label: "Post-Crusades", start: 1270, end: 1360 } // slightly past 1350
+  { label: "Post-Crusades", start: 1270, end: 1360 }
 ];
 
 let dataset = null;
@@ -77,40 +77,58 @@ function updatePeriodUI(index) {
   periodValue.textContent = `${p.label} (${p.start}–${p.end})`;
 }
 
-function markerRadiusForKind(kind) {
-  const k = String(kind || "").toLowerCase();
-  if (k === "created") return 8;
-  return 6; // inspired_by, moved, influence, etc.
+// --- Styling helpers ---
+function inspirationColor(inspiration) {
+  const v = String(inspiration || "").trim().toLowerCase();
+  if (v === "christianity") return "#d32f2f"; // red
+  if (v === "islam") return "#2e7d32";        // green
+  return "#5e35b1";                           // purple default
+}
+
+function markerStyleForEvent(ev) {
+  const kind = String(ev.kind || "").toLowerCase();
+  if (kind === "created") {
+    return { radius: 8, color: "#111", fillColor: "#111" };
+  }
+  if (kind === "inspired_by") {
+    const c = inspirationColor(ev.inspiration);
+    return { radius: 7, color: c, fillColor: c };
+  }
+  // fallback
+  return { radius: 6, color: "#0b4f6c", fillColor: "#0b4f6c" };
 }
 
 function buildPanelHtml(obj, ev, p, visibleEventsForThisObject) {
   const title = escapeHtml(obj?.title || obj?.object_id || "Unknown object");
-  const type = escapeHtml(obj?.type || "");
-  const summary = escapeHtml(obj?.summary || "");
-  const note = escapeHtml(ev?.note || "");
-  const place = escapeHtml(ev?.place_name || "");
-  const kind = escapeHtml(ev?.kind || "");
-  const year = escapeHtml(ev?.year || "");
 
-  const thumb = obj?.thumbnail
-    ? `<img class="panelThumb" src="${escapeHtml(obj.thumbnail)}" alt="${title} thumbnail">`
+  const thumbPath = obj?.thumbnail ? String(obj.thumbnail).trim() : "";
+  // IMPORTANT: show the path if the image fails to load (helps spot typo/case mismatch)
+  const thumbHtml = thumbPath
+    ? `
+      <img class="panelThumb"
+           src="${escapeHtml(thumbPath)}"
+           alt="${title} thumbnail"
+           onerror="this.style.display='none'; document.getElementById('thumbPath').style.display='block';" />
+      <p id="thumbPath" style="display:none;font-size:12px;color:#666;">
+        Thumbnail not found: <code>${escapeHtml(thumbPath)}</code>
+      </p>
+    `
     : "";
 
-  // Inspired-by link (optional)
+  const kind = escapeHtml(ev?.kind || "");
+  const place = escapeHtml(ev?.place_name || "");
+  const year = escapeHtml(ev?.year || "");
+  const note = escapeHtml(ev?.note || "");
+
+  const inspiredById = String(ev?.inspired_by_object_id || "").trim();
   let inspiredHtml = "";
-  if (ev?.inspired_by_object_id) {
-    const srcObj = objectsById.get(ev.inspired_by_object_id);
-    const srcTitle = srcObj ? srcObj.title : ev.inspired_by_object_id;
-    inspiredHtml = `<p><strong>Inspired by:</strong> ${escapeHtml(srcTitle)} (${escapeHtml(ev.inspired_by_object_id)})</p>`;
+  if (inspiredById) {
+    const srcObj = objectsById.get(inspiredById);
+    inspiredHtml = `<p><strong>Inspired by:</strong> ${escapeHtml(srcObj?.title || inspiredById)} (${escapeHtml(inspiredById)})</p>`;
   }
 
   const inspirationHtml = ev?.inspiration
     ? `<p><strong>Inspiration:</strong> ${escapeHtml(ev.inspiration)}</p>`
-    : "";
-
-  const tags = Array.isArray(obj?.tags) ? obj.tags : [];
-  const tagsHtml = tags.length
-    ? `<p><strong>Tags:</strong> ${tags.map(t => escapeHtml(String(t).trim())).filter(Boolean).join(", ")}</p>`
     : "";
 
   const timelineHtml = visibleEventsForThisObject?.length
@@ -126,17 +144,34 @@ function buildPanelHtml(obj, ev, p, visibleEventsForThisObject) {
 
   return `
     <p><strong>Selected period:</strong> ${escapeHtml(p.label)} (${p.start}–${p.end})</p>
-    ${thumb}
-    ${type ? `<p><strong>Type:</strong> ${type}</p>` : ""}
+    ${thumbHtml}
     <p><strong>Event:</strong> ${kind} — <strong>${place}</strong> (${year})</p>
     ${note ? `<p>${note}</p>` : ""}
     ${inspiredHtml}
     ${inspirationHtml}
     <hr />
-    ${summary ? `<p><strong>Object summary</strong><br>${summary}</p>` : ""}
-    ${tagsHtml}
+    ${obj?.summary ? `<p><strong>Object summary</strong><br>${escapeHtml(obj.summary)}</p>` : ""}
     ${timelineHtml}
   `;
+}
+
+// Find a good "source" location for an inspired_by line:
+// pick the earliest available event (prefer created) for the inspired_by_object_id
+function findSourceLatLng(sourceObjectId, maxYear) {
+  const srcEvents = dataset.events
+    .filter(e => e.object_id === sourceObjectId)
+    .filter(e => e.lat != null && e.lng != null)
+    .filter(e => Number(e.year) <= Number(maxYear));
+
+  if (srcEvents.length === 0) return null;
+
+  // Prefer created if exists, otherwise earliest
+  const created = srcEvents
+    .filter(e => String(e.kind || "").toLowerCase() === "created")
+    .sort((a, b) => Number(a.year) - Number(b.year))[0];
+
+  const best = created || srcEvents.sort((a, b) => Number(a.year) - Number(b.year))[0];
+  return [Number(best.lat), Number(best.lng)];
 }
 
 function drawForPeriod(periodIndex) {
@@ -145,8 +180,7 @@ function drawForPeriod(periodIndex) {
   const p = periods[periodIndex];
   clearLayers();
 
-  // Keep same behaviour as your demo:
-  // show all events up to the period end year (cumulative)
+  // Keep "cumulative" behaviour (like your original demo)
   const visibleEvents = dataset.events
     .filter(e => Number(e.year) <= p.end)
     .filter(e => e.lat != null && e.lng != null);
@@ -156,38 +190,50 @@ function drawForPeriod(periodIndex) {
     return;
   }
 
-  // Group by object_id
+  // Group by object_id (for panel timelines)
   const byObject = new Map();
   for (const ev of visibleEvents) {
-    const id = ev.object_id;
-    if (!byObject.has(id)) byObject.set(id, []);
-    byObject.get(id).push(ev);
+    if (!byObject.has(ev.object_id)) byObject.set(ev.object_id, []);
+    byObject.get(ev.object_id).push(ev);
   }
 
-  for (const [objectId, evs] of byObject.entries()) {
-    const obj = objectsById.get(objectId) || { object_id: objectId, title: objectId };
-
-    // Sort by year for routes and timeline
+  // Sort each object's events once
+  for (const evs of byObject.values()) {
     evs.sort((a, b) => Number(a.year) - Number(b.year));
+  }
 
-    // Markers
-    for (const ev of evs) {
-      const marker = L.circleMarker([Number(ev.lat), Number(ev.lng)], {
-        radius: markerRadiusForKind(ev.kind),
-        weight: 2
-      });
+  // Draw markers and inspired_by dotted lines
+  for (const ev of visibleEvents) {
+    const obj = objectsById.get(ev.object_id) || { object_id: ev.object_id, title: ev.object_id };
+    const objEvents = byObject.get(ev.object_id) || [];
 
-      marker.on("click", () => {
-        setPanel(obj.title || obj.object_id || "Object", buildPanelHtml(obj, ev, p, evs));
-      });
+    const style = markerStyleForEvent(ev);
+    const marker = L.circleMarker([Number(ev.lat), Number(ev.lng)], {
+      radius: style.radius,
+      weight: 2,
+      color: style.color,
+      fillColor: style.fillColor,
+      fillOpacity: 0.35
+    });
 
-      marker.addTo(markersLayer);
-    }
+    marker.on("click", () => {
+      setPanel(obj.title || obj.object_id || "Object", buildPanelHtml(obj, ev, p, objEvents));
+    });
 
-    // Route line if 2+ visible events for this object
-    if (evs.length >= 2) {
-      const latlngs = evs.map(e => [Number(e.lat), Number(e.lng)]);
-      L.polyline(latlngs, { weight: 3, opacity: 0.8 }).addTo(routesLayer);
+    marker.addTo(markersLayer);
+
+    // Inspired-by dotted route
+    if (String(ev.kind || "").toLowerCase() === "inspired_by" && ev.inspired_by_object_id) {
+      const src = findSourceLatLng(String(ev.inspired_by_object_id).trim(), ev.year);
+      if (src) {
+        const c = inspirationColor(ev.inspiration);
+        L.polyline([src, [Number(ev.lat), Number(ev.lng)]], {
+          color: c,
+          weight: 3,
+          opacity: 0.9,
+          dashArray: "6 6" // dotted/dashed
+        }).addTo(routesLayer);
+      }
     }
   }
 }
