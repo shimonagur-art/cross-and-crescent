@@ -92,11 +92,10 @@ body {
 }
 
 /* Active period highlight */
-/* Active period highlight — colour instead of frame */
 .bands span.active {
-  color: #0b4f6c;                 /* deep blue text */
+  color: #0b4f6c;
   font-weight: 700;
-  background: #e6f2fa;            /* light blue highlight */
+  background: #e6f2fa;
   border-bottom-color: transparent;
 }
 
@@ -148,6 +147,18 @@ body {
 
 .panelBody p { 
   margin-top: 0; 
+}
+
+/* === NEW: Thumbnail styling (safe, contained) === */
+/* This ONLY affects images explicitly given class="panelThumb" */
+.panelThumb {
+  width: 140px;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px;
+  border: 1px solid #e6e6e6;
+  margin: 8px 0 10px;
 }
 
 /* ================= Attribution ================= */
