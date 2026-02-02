@@ -13,7 +13,7 @@ const periods = [
   { label: "6th Crusade", start: 1228, end: 1229 },
   { label: "7th Crusade", start: 1248, end: 1254 },
   { label: "8th Crusade", start: 1270, end: 1270 },
-  { label: "Post-Crusades", start: 1270, end: 1360 }
+  { label: "Post-Crusades", start: 1270, end: 1350 }
 ];
 
 let dataset = null;
