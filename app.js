@@ -1,27 +1,26 @@
+// ==============================
+// Cross & Crescent - app.js (DATA-DRIVEN)
+// Loads:
+//   - data/objects.json  (array of objects)
+//   - data/periods.json  ({ periods: [...] })
+// Renders:
+//   - markers per object location
+//   - hover tooltip with thumbnail + minimal text
+//   - click opens right panel with full details
+//   - routes (influence) from each location -> target, colored by inspiration
+// ==============================
+
 const periodRange = document.getElementById("periodRange");
 const periodValue = document.getElementById("periodValue");
 const panelTitle = document.getElementById("panelTitle");
 const panelBody = document.getElementById("panelBody");
 
-// 9 discrete periods
-const periods = [
-  { label: "1st Crusade", start: 1096, end: 1099 },
-  { label: "2nd Crusade", start: 1147, end: 1149 },
-  { label: "3rd Crusade", start: 1189, end: 1192 },
-  { label: "4th Crusade", start: 1202, end: 1204 },
-  { label: "5th Crusade", start: 1217, end: 1221 },
-  { label: "6th Crusade", start: 1228, end: 1229 },
-  { label: "7th Crusade", start: 1248, end: 1254 },
-  { label: "8th Crusade", start: 1270, end: 1270 },
-  { label: "Post-Crusades", start: 1270, end: 1350 }
-];
-
-let dataset = null;
-let objectsById = new Map();
-
 let map = null;
 let markersLayer = null;
 let routesLayer = null;
+
+let PERIODS = [];             // from data/periods.json
+let OBJECTS_BY_ID = new Map(); // from data/objects.json
 
 function setPanel(title, html) {
   panelTitle.textContent = title;
@@ -60,190 +59,216 @@ function updateActiveBand(index) {
   });
 }
 
-async function loadData() {
-  const res = await fetch("data.json", { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to load data.json");
-  dataset = await res.json();
-
-  if (!dataset.objects || !dataset.events) {
-    throw new Error("data.json must contain { objects: [...], events: [...] }");
-  }
-
-  objectsById = new Map(dataset.objects.map(o => [o.object_id, o]));
-}
-
 function updatePeriodUI(index) {
-  const p = periods[index];
-  periodValue.textContent = `${p.label} (${p.start}–${p.end})`;
+  const p = PERIODS[index];
+  if (!p) return;
+  const start = p.yearStart ?? p.start ?? "";
+  const end = p.yearEnd ?? p.end ?? "";
+  periodValue.textContent = `${p.label} (${start}–${end})`;
 }
 
-// --- Styling helpers ---
-function inspirationColor(inspiration) {
-  const v = String(inspiration || "").trim().toLowerCase();
+// --- Color / style helpers ---
+function routeColor(influence) {
+  const v = String(influence || "").trim().toLowerCase();
   if (v === "christianity") return "#d32f2f"; // red
   if (v === "islam") return "#2e7d32";        // green
   return "#5e35b1";                           // purple default
 }
 
-function markerStyleForEvent(ev) {
-  const kind = String(ev.kind || "").toLowerCase();
-  if (kind === "created") {
-    return { radius: 8, color: "#111", fillColor: "#111" };
-  }
-  if (kind === "inspired_by") {
-    const c = inspirationColor(ev.inspiration);
-    return { radius: 7, color: c, fillColor: c };
-  }
-  // fallback
-  return { radius: 6, color: "#0b4f6c", fillColor: "#0b4f6c" };
+function categoryColor(category) {
+  const v = String(category || "").trim().toLowerCase();
+  if (v === "cultural") return "#2b6cb0";     // blue
+  if (v === "commercial") return "#2f855a";   // green
+  if (v === "conquer") return "#c53030";      // red-ish
+  return "#0b4f6c";                           // fallback teal
 }
 
-function buildPanelHtml(obj, ev, p, visibleEventsForThisObject) {
-  const title = escapeHtml(obj?.title || obj?.object_id || "Unknown object");
+// --- Hover tooltip HTML ---
+function buildHoverHTML(obj) {
+  const title = escapeHtml(obj?.title || obj?.id || "Object");
+  const text = escapeHtml(obj?.hover?.text || "");
+  const thumb = String(obj?.hover?.thumb || "").trim();
 
-  const thumbPath = obj?.thumbnail ? String(obj.thumbnail).trim() : "";
-  // IMPORTANT: show the path if the image fails to load (helps spot typo/case mismatch)
-  const thumbHtml = thumbPath
-    ? `
-      <img class="panelThumb"
-           src="${escapeHtml(thumbPath)}"
-           alt="${title} thumbnail"
-           onerror="this.style.display='none'; document.getElementById('thumbPath').style.display='block';" />
-      <p id="thumbPath" style="display:none;font-size:12px;color:#666;">
-        Thumbnail not found: <code>${escapeHtml(thumbPath)}</code>
-      </p>
-    `
+  const imgHtml = thumb
+    ? `<img class="hover-thumb" src="${escapeHtml(thumb)}" alt="${title}" />`
     : "";
 
-  const kind = escapeHtml(ev?.kind || "");
-  const place = escapeHtml(ev?.place_name || "");
-  const year = escapeHtml(ev?.year || "");
-  const note = escapeHtml(ev?.note || "");
+  return `
+    <div class="hover-card">
+      ${imgHtml}
+      <div class="hover-meta">
+        <div class="hover-title">${title}</div>
+        ${text ? `<div class="hover-text">${text}</div>` : ""}
+      </div>
+    </div>
+  `;
+}
 
-  const inspiredById = String(ev?.inspired_by_object_id || "").trim();
-  let inspiredHtml = "";
-  if (inspiredById) {
-    const srcObj = objectsById.get(inspiredById);
-    inspiredHtml = `<p><strong>Inspired by:</strong> ${escapeHtml(srcObj?.title || inspiredById)} (${escapeHtml(inspiredById)})</p>`;
-  }
+// --- Right panel HTML ---
+function buildPanelHTML(obj, period) {
+  const title = escapeHtml(obj?.title || obj?.id || "Object");
+  const subtitle = escapeHtml(obj?.panel?.subtitle || "");
+  const body = escapeHtml(obj?.panel?.body || "");
 
-  const inspirationHtml = ev?.inspiration
-    ? `<p><strong>Inspiration:</strong> ${escapeHtml(ev.inspiration)}</p>`
+  const tags = Array.isArray(obj?.tags) ? obj.tags : [];
+  const tagHtml = tags.length
+    ? `<p><strong>Tags:</strong> ${tags.map(t => escapeHtml(t)).join(", ")}</p>`
     : "";
 
-  const timelineHtml = visibleEventsForThisObject?.length
+  const locs = Array.isArray(obj?.locations) ? obj.locations : [];
+  const locHtml = locs.length
+    ? `<p><strong>Locations:</strong> ${locs.map(l => escapeHtml(l.label || "")).filter(Boolean).join(", ")}</p>`
+    : "";
+
+  const pLabel = escapeHtml(period?.label || "");
+  const pStart = escapeHtml(period?.yearStart ?? "");
+  const pEnd = escapeHtml(period?.yearEnd ?? "");
+
+  const images = Array.isArray(obj?.panel?.images) ? obj.panel.images : [];
+  const imagesHtml = images.length
     ? `
-      <p><strong>Visible events up to ${escapeHtml(p.end)}:</strong></p>
-      <ul>
-        ${visibleEventsForThisObject
-          .map(x => `<li>${escapeHtml(x.year)}: ${escapeHtml(x.place_name)} (${escapeHtml(x.kind)})</li>`)
+      <div class="panel-images">
+        ${images
+          .filter(Boolean)
+          .map(src => `<img class="panel-img" src="${escapeHtml(src)}" alt="${title}" />`)
           .join("")}
-      </ul>
+      </div>
     `
     : "";
 
   return `
-    <p><strong>Selected period:</strong> ${escapeHtml(p.label)} (${p.start}–${p.end})</p>
-    ${thumbHtml}
-    <p><strong>Event:</strong> ${kind} — <strong>${place}</strong> (${year})</p>
-    ${note ? `<p>${note}</p>` : ""}
-    ${inspiredHtml}
-    ${inspirationHtml}
-    <hr />
-    ${obj?.summary ? `<p><strong>Object summary</strong><br>${escapeHtml(obj.summary)}</p>` : ""}
-    ${timelineHtml}
+    <p><strong>Selected period:</strong> ${pLabel} (${pStart}–${pEnd})</p>
+    ${subtitle ? `<h3>${subtitle}</h3>` : ""}
+    ${tagHtml}
+    ${locHtml}
+    ${body ? `<p>${body}</p>` : ""}
+    ${imagesHtml}
   `;
 }
 
-// Find a good "source" location for an inspired_by line:
-// pick the earliest available event (prefer created) for the inspired_by_object_id
-function findSourceLatLng(sourceObjectId, maxYear) {
-  const srcEvents = dataset.events
-    .filter(e => e.object_id === sourceObjectId)
-    .filter(e => e.lat != null && e.lng != null)
-    .filter(e => Number(e.year) <= Number(maxYear));
+// --- Data loading ---
+async function loadData() {
+  const [objectsRes, periodsRes] = await Promise.all([
+    fetch("data/objects.json", { cache: "no-store" }),
+    fetch("data/periods.json", { cache: "no-store" })
+  ]);
 
-  if (srcEvents.length === 0) return null;
+  if (!objectsRes.ok) throw new Error("Failed to load data/objects.json");
+  if (!periodsRes.ok) throw new Error("Failed to load data/periods.json");
 
-  // Prefer created if exists, otherwise earliest
-  const created = srcEvents
-    .filter(e => String(e.kind || "").toLowerCase() === "created")
-    .sort((a, b) => Number(a.year) - Number(b.year))[0];
+  const objectsArr = await objectsRes.json();
+  const periodsObj = await periodsRes.json();
 
-  const best = created || srcEvents.sort((a, b) => Number(a.year) - Number(b.year))[0];
-  return [Number(best.lat), Number(best.lng)];
+  if (!Array.isArray(objectsArr)) {
+    throw new Error("objects.json must be an array of objects");
+  }
+  if (!periodsObj || !Array.isArray(periodsObj.periods)) {
+    throw new Error('periods.json must be an object like: { "periods": [ ... ] }');
+  }
+
+  OBJECTS_BY_ID = new Map(objectsArr.map(o => [o.id, o]));
+  PERIODS = periodsObj.periods;
+
+  // Keep slider in sync with periods length
+  periodRange.min = "0";
+  periodRange.max = String(Math.max(0, PERIODS.length - 1));
+  if (!periodRange.value) periodRange.value = "0";
+
+  // If slider value exceeds max (after edits), clamp it
+  const v = Number(periodRange.value);
+  if (v > PERIODS.length - 1) periodRange.value = String(PERIODS.length - 1);
 }
 
+// --- Render for a period index ---
 function drawForPeriod(periodIndex) {
-  if (!dataset) return;
-
-  const p = periods[periodIndex];
+  const period = PERIODS[periodIndex];
   clearLayers();
 
-  // Keep "cumulative" behaviour (like your original demo)
-  const visibleEvents = dataset.events
-    .filter(e => Number(e.year) <= p.end)
-    .filter(e => e.lat != null && e.lng != null);
-
-  if (visibleEvents.length === 0) {
-    setPanel("No events yet", `<p>No mapped events found up to ${escapeHtml(p.end)}.</p>`);
+  if (!period) {
+    setPanel("No period", "<p>Period not found.</p>");
     return;
   }
 
-  // Group by object_id (for panel timelines)
-  const byObject = new Map();
-  for (const ev of visibleEvents) {
-    if (!byObject.has(ev.object_id)) byObject.set(ev.object_id, []);
-    byObject.get(ev.object_id).push(ev);
+  const objectIds = Array.isArray(period.objects) ? period.objects : [];
+
+  if (objectIds.length === 0) {
+    setPanel("No objects", `<p>No objects configured for ${escapeHtml(period.label)}.</p>`);
+    return;
   }
 
-  // Sort each object's events once
-  for (const evs of byObject.values()) {
-    evs.sort((a, b) => Number(a.year) - Number(b.year));
-  }
+  // Render each object
+  for (const id of objectIds) {
+    const obj = OBJECTS_BY_ID.get(id);
+    if (!obj) continue;
 
-  // Draw markers and inspired_by dotted lines
-  for (const ev of visibleEvents) {
-    const obj = objectsById.get(ev.object_id) || { object_id: ev.object_id, title: ev.object_id };
-    const objEvents = byObject.get(ev.object_id) || [];
+    const col = categoryColor(obj.category);
+    const locations = Array.isArray(obj.locations) ? obj.locations : [];
+    const routes = Array.isArray(obj.routes) ? obj.routes : [];
 
-    const style = markerStyleForEvent(ev);
-    const marker = L.circleMarker([Number(ev.lat), Number(ev.lng)], {
-      radius: style.radius,
-      weight: 2,
-      color: style.color,
-      fillColor: style.fillColor,
-      fillOpacity: 0.35
-    });
+    // If object has no locations, skip (nothing to place)
+    if (locations.length === 0) continue;
 
-    marker.on("click", () => {
-      setPanel(obj.title || obj.object_id || "Object", buildPanelHtml(obj, ev, p, objEvents));
-    });
+    // For each location: marker + routes from that location
+    for (const loc of locations) {
+      if (loc?.lat == null || loc?.lng == null) continue;
 
-    marker.addTo(markersLayer);
+      const marker = L.circleMarker([Number(loc.lat), Number(loc.lng)], {
+        radius: 6,
+        weight: 2,
+        color: col,
+        fillColor: col,
+        fillOpacity: 0.9
+      });
 
-    // Inspired-by dotted route
-    if (String(ev.kind || "").toLowerCase() === "inspired_by" && ev.inspired_by_object_id) {
-      const src = findSourceLatLng(String(ev.inspired_by_object_id).trim(), ev.year);
-      if (src) {
-        const c = inspirationColor(ev.inspiration);
-        L.polyline([src, [Number(ev.lat), Number(ev.lng)]], {
-          color: c,
-          weight: 3,
-          opacity: 0.9,
-          dashArray: "6 6" // dotted/dashed
-        }).addTo(routesLayer);
+      // Hover tooltip with thumbnail
+      marker.bindTooltip(buildHoverHTML(obj), {
+        direction: "top",
+        offset: [0, -8],
+        opacity: 1,
+        className: "hover-tooltip",
+        sticky: true
+      });
+
+      // Click -> open panel
+      marker.on("click", () => {
+        setPanel(obj.title || obj.id || "Object", buildPanelHTML(obj, period));
+      });
+
+      marker.addTo(markersLayer);
+
+      // Draw influence routes (from this location to each route target)
+      for (const r of routes) {
+        if (r?.toLat == null || r?.toLng == null) continue;
+
+        L.polyline(
+          [[Number(loc.lat), Number(loc.lng)], [Number(r.toLat), Number(r.toLng)]],
+          {
+            color: routeColor(r.influence),
+            weight: 3,
+            opacity: 0.9,
+            dashArray: "6 8" // dashed (clear + elegant)
+          }
+        ).addTo(routesLayer);
       }
     }
   }
+
+  // Default panel message (until user clicks a marker)
+  setPanel(
+    "Select an object",
+    `<p>Hover markers to preview (thumbnail + summary). Click a marker to see full details.</p>`
+  );
 }
 
 function applyPeriod(index) {
-  updatePeriodUI(index);
-  updateActiveBand(index);
-  drawForPeriod(index);
+  const idx = Math.max(0, Math.min(index, PERIODS.length - 1));
+  periodRange.value = String(idx);
+  updatePeriodUI(idx);
+  updateActiveBand(idx);
+  drawForPeriod(idx);
 }
 
+// --- Controls wiring ---
 function wireControls() {
   periodRange.addEventListener("input", (e) => {
     applyPeriod(Number(e.target.value));
@@ -254,8 +279,10 @@ function wireBands() {
   document.querySelectorAll(".bands span").forEach((el) => {
     const activate = () => {
       const idx = Number(el.dataset.index);
-      periodRange.value = String(idx);
-      applyPeriod(idx);
+      // Only activate if idx is within loaded periods
+      if (Number.isFinite(idx) && idx >= 0 && idx < PERIODS.length) {
+        applyPeriod(idx);
+      }
     };
 
     el.addEventListener("click", activate);
@@ -269,6 +296,7 @@ function wireBands() {
   });
 }
 
+// --- Main ---
 (async function main() {
   initMap();
   wireControls();
