@@ -173,6 +173,71 @@ body {
   color: inherit; 
 }
 
+/* ================= Hover tooltip with thumbnail (Leaflet) ================= */
+/* We use a custom className ("hover-tooltip") so normal Leaflet tooltips/popups are unaffected */
+.hover-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.hover-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 10px;
+  padding: 10px;
+  max-width: 320px;
+}
+
+.hover-thumb {
+  width: 70px;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex: 0 0 auto;
+  border: 1px solid #e6e6e6;
+}
+
+.hover-meta {
+  min-width: 0;
+}
+
+.hover-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.hover-text {
+  font-size: 12px;
+  line-height: 1.25;
+  color: #333;
+  opacity: 0.92;
+  word-break: break-word;
+}
+
+/* ================= Right panel image grid ================= */
+
+.panel-images {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.panel-img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #e6e6e6;
+}
+
 /* ================= Responsive ================= */
 
 @media (max-width: 900px) {
@@ -190,5 +255,19 @@ body {
   .bands {
     grid-template-columns: repeat(3, 1fr);
     row-gap: 8px;
+  }
+
+  /* Slightly smaller hover cards on mobile */
+  .hover-card {
+    max-width: 260px;
+  }
+
+  .hover-thumb {
+    width: 60px;
+    height: 60px;
+  }
+
+  .panel-images {
+    grid-template-columns: 1fr;
   }
 }
