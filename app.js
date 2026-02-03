@@ -96,7 +96,8 @@ function categoryColor(category) {
 function markerStyleBase(color) {
   return {
     radius: 11,        // bigger
-    weight: 2,
+    weight: 0,
+    opacity: 0,
     color: color,
     fillColor: color,
     fillOpacity: 0.45  // semi-transparent at rest
@@ -106,7 +107,8 @@ function markerStyleBase(color) {
 function markerStyleHover(color) {
   return {
     radius: 12,
-    weight: 3,
+    weight: 0,
+    opacity: 0,
     color: color,
     fillColor: color,
     fillOpacity: 0.95  // much more visible on hover
@@ -116,7 +118,8 @@ function markerStyleHover(color) {
 function markerStyleSelected(color) {
   return {
     radius: 12,
-    weight: 4,
+    weight: 0,
+    opacity: 0,
     color: color,
     fillColor: color,
     fillOpacity: 1     // fully opaque when selected
