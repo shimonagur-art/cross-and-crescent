@@ -5,9 +5,11 @@
 //   - data/periods.json  ({ periods: [...] })
 // Renders:
 //   - markers per object location
-//   - hover tooltips with thumbnails (clamped text via CSS)
+//   - hover tooltips with thumbnails (minimal text)
 //   - click opens right panel with full details
 //   - routes (influence) from each location -> target, colored by influence
+// Adds:
+//   - Fade-out old period then fade-in new period (smooth transitions)
 // ==============================
 
 const periodRange = document.getElementById("periodRange");
@@ -24,6 +26,9 @@ let OBJECTS_BY_ID = new Map(); // from data/objects.json
 
 // Track the currently selected marker so we can keep it darker
 let selectedMarker = null;
+
+// Prevent spamming transitions when dragging slider fast
+let isTransitioning = false;
 
 function setPanel(title, html) {
   panelTitle.textContent = title;
@@ -87,42 +92,108 @@ function categoryColor(category) {
   return "#0b4f6c";                           // fallback teal
 }
 
-// Marker visual states (bigger + brighter, then darker on hover/click)
+// Marker visual states (bigger; base semi-transparent; hover/selected opaque)
 function markerStyleBase(color) {
   return {
-    radius: 12,         // ✅ bigger
+    radius: 11,        // bigger
     weight: 2,
     color: color,
     fillColor: color,
-    fillOpacity: 0.25  // ✅ brighter
+    fillOpacity: 0.45  // semi-transparent at rest
   };
 }
 
 function markerStyleHover(color) {
   return {
-    radius: 14,        // slightly bigger on hover
+    radius: 12,
     weight: 3,
     color: color,
     fillColor: color,
-    fillOpacity: 0.95
+    fillOpacity: 0.95  // much more visible on hover
   };
 }
 
 function markerStyleSelected(color) {
   return {
-    radius: 14,
+    radius: 12,
     weight: 4,
     color: color,
     fillColor: color,
-    fillOpacity: 1
+    fillOpacity: 1     // fully opaque when selected
   };
 }
 
-// --- Hover tooltip HTML ---
+// --- Fade helpers (for period transitions) ---
+function easeOutCubic(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function animateStyle(layer, from, to, durationMs = 300, onDone) {
+  const start = performance.now();
+
+  function tick(now) {
+    const t = Math.min(1, (now - start) / durationMs);
+    const e = easeOutCubic(t);
+
+    const cur = {};
+    for (const k of Object.keys(to)) {
+      const a = (from[k] ?? 0);
+      const b = to[k];
+      cur[k] = a + (b - a) * e;
+    }
+
+    layer.setStyle(cur);
+
+    if (t < 1) requestAnimationFrame(tick);
+    else if (onDone) onDone();
+  }
+
+  requestAnimationFrame(tick);
+}
+
+// Fade out everything currently shown (markers + routes), then resolve
+function fadeOutLayers(markersLayer, routesLayer, durationMs = 220) {
+  const markers = [];
+  markersLayer.eachLayer(l => markers.push(l));
+
+  const routes = [];
+  routesLayer.eachLayer(l => routes.push(l));
+
+  for (const m of markers) {
+    const from = {
+      fillOpacity: (typeof m.options?.fillOpacity === "number") ? m.options.fillOpacity : 0.5,
+      opacity: (typeof m.options?.opacity === "number") ? m.options.opacity : 1
+    };
+    const to = { fillOpacity: 0, opacity: 0 };
+    animateStyle(m, from, to, durationMs);
+  }
+
+  for (const r of routes) {
+    const from = { opacity: (typeof r.options?.opacity === "number") ? r.options.opacity : 0.9 };
+    const to = { opacity: 0 };
+    animateStyle(r, from, to, durationMs);
+  }
+
+  return new Promise(resolve => setTimeout(resolve, durationMs));
+}
+
+function fadeInMarker(marker, targetFillOpacity, durationMs = 450) {
+  // Start invisible (both stroke and fill)
+  marker.setStyle({ fillOpacity: 0, opacity: 0 });
+
+  const from = { fillOpacity: 0, opacity: 0 };
+  const to = { fillOpacity: targetFillOpacity, opacity: 1 };
+  animateStyle(marker, from, to, durationMs);
+}
+
+// --- Hover tooltip HTML (minimal) ---
 function buildHoverHTML(obj) {
   const title = escapeHtml(obj?.title || obj?.id || "Object");
-  const text = escapeHtml(obj?.hover?.text || "");
   const thumb = String(obj?.hover?.thumb || "").trim();
+
+  // Optional year if you have it in data (obj.hover.year OR obj.year)
+  const yearRaw = obj?.hover?.year ?? obj?.year ?? "";
+  const year = yearRaw ? escapeHtml(yearRaw) : "";
 
   const imgHtml = thumb
     ? `<img class="hover-thumb" src="${escapeHtml(thumb)}" alt="${title}" />`
@@ -133,7 +204,7 @@ function buildHoverHTML(obj) {
       ${imgHtml}
       <div class="hover-meta">
         <div class="hover-title">${title}</div>
-        ${text ? `<div class="hover-text">${text}</div>` : ""}
+        ${year ? `<div class="hover-year">${year}</div>` : ""}
       </div>
     </div>
   `;
@@ -216,6 +287,7 @@ async function loadData() {
 // --- Render for a period index ---
 function drawForPeriod(periodIndex) {
   const period = PERIODS[periodIndex];
+
   clearLayers();
 
   if (!period) {
@@ -249,7 +321,7 @@ function drawForPeriod(periodIndex) {
 
       const marker = L.circleMarker([Number(loc.lat), Number(loc.lng)], baseStyle);
 
-      // Store styles on marker for easy toggling
+      // Store styles on marker for toggling
       marker.__baseStyle = baseStyle;
       marker.__hoverStyle = hoverStyle;
       marker.__selectedStyle = selectedStyle;
@@ -262,9 +334,9 @@ function drawForPeriod(periodIndex) {
         sticky: true
       });
 
-      // Hover: darker/stronger
+      // Hover: stronger
       marker.on("mouseover", () => {
-        if (selectedMarker === marker) return; // selected stays selected style
+        if (selectedMarker === marker) return;
         marker.setStyle(marker.__hoverStyle);
       });
 
@@ -273,9 +345,8 @@ function drawForPeriod(periodIndex) {
         marker.setStyle(marker.__baseStyle);
       });
 
-      // Click: select marker (stay circular, just darker/stronger)
+      // Click: select marker (stays circular, just stronger)
       marker.on("click", () => {
-        // Unselect previous
         if (selectedMarker && selectedMarker !== marker) {
           selectedMarker.setStyle(selectedMarker.__baseStyle);
         }
@@ -286,6 +357,9 @@ function drawForPeriod(periodIndex) {
       });
 
       marker.addTo(markersLayer);
+
+      // Fade IN markers when they appear for this period
+      fadeInMarker(marker, marker.__baseStyle.fillOpacity, 750);
 
       // Routes from this location to each target
       for (const r of routes) {
@@ -310,12 +384,21 @@ function drawForPeriod(periodIndex) {
   );
 }
 
-function applyPeriod(index) {
+// Fade-out current, then draw new period (fade-in happens per marker)
+async function applyPeriod(index) {
+  if (isTransitioning) return;
+  isTransitioning = true;
+
   const idx = Math.max(0, Math.min(index, PERIODS.length - 1));
   periodRange.value = String(idx);
   updatePeriodUI(idx);
   updateActiveBand(idx);
+
+  // Fade out current layers, then clear & draw new
+  await fadeOutLayers(markersLayer, routesLayer, 320);
   drawForPeriod(idx);
+
+  isTransitioning = false;
 }
 
 // --- Controls wiring ---
@@ -353,7 +436,7 @@ function wireBands() {
 
   try {
     await loadData();
-    applyPeriod(Number(periodRange.value));
+    await applyPeriod(Number(periodRange.value)); // wait for initial fade-in
   } catch (err) {
     setPanel("Error", `<p>${escapeHtml(err.message)}</p>`);
     console.error(err);
