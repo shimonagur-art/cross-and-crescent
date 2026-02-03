@@ -94,7 +94,7 @@ function markerStyleBase(color) {
     weight: 2,
     color: color,
     fillColor: color,
-    fillOpacity: 0.45  // ✅ brighter
+    fillOpacity: 0.25  // ✅ brighter
   };
 }
 
