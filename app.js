@@ -362,7 +362,7 @@ function drawForPeriod(periodIndex) {
       marker.addTo(markersLayer);
 
       // Fade IN markers when they appear for this period
-      fadeInMarker(marker, marker.__baseStyle.fillOpacity, 800);
+      fadeInMarker(marker, marker.__baseStyle.fillOpacity, 700);
 
       // Routes from this location to each target
       for (const r of routes) {
@@ -398,7 +398,7 @@ async function applyPeriod(index) {
   updateActiveBand(idx);
 
   // Fade out current layers, then clear & draw new
-  await fadeOutLayers(markersLayer, routesLayer, 800);
+  await fadeOutLayers(markersLayer, routesLayer, 700);
   drawForPeriod(idx);
 
   isTransitioning = false;
