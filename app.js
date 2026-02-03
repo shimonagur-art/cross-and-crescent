@@ -100,7 +100,7 @@ function markerStyleBase(color) {
     opacity: 0,
     color: color,
     fillColor: color,
-    fillOpacity: 0.45  // semi-transparent at rest
+    fillOpacity: 0.65  // semi-transparent at rest
   };
 }
 
