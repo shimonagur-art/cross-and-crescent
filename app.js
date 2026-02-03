@@ -90,27 +90,27 @@ function categoryColor(category) {
 // Marker visual states (bigger + brighter, then darker on hover/click)
 function markerStyleBase(color) {
   return {
-    radius: 9,         // ✅ bigger
+    radius: 12,         // ✅ bigger
     weight: 2,
     color: color,
     fillColor: color,
-    fillOpacity: 0.95  // ✅ brighter
+    fillOpacity: 0.45  // ✅ brighter
   };
 }
 
 function markerStyleHover(color) {
   return {
-    radius: 10,        // slightly bigger on hover
+    radius: 14,        // slightly bigger on hover
     weight: 3,
     color: color,
     fillColor: color,
-    fillOpacity: 1
+    fillOpacity: 0.95
   };
 }
 
 function markerStyleSelected(color) {
   return {
-    radius: 10,
+    radius: 14,
     weight: 4,
     color: color,
     fillColor: color,
