@@ -124,8 +124,8 @@ function markerStyleSelected(color) {
 }
 
 // --- Fade helpers (for period transitions) ---
-function easeOutCubic(t) {
-  return 1 - Math.pow(1 - t, 3);
+function easeLinear(t) {
+  return t;
 }
 
 function animateStyle(layer, from, to, durationMs = 300, onDone) {
@@ -133,7 +133,7 @@ function animateStyle(layer, from, to, durationMs = 300, onDone) {
 
   function tick(now) {
     const t = Math.min(1, (now - start) / durationMs);
-    const e = easeOutCubic(t);
+    const e = easeLinear(t);
 
     const cur = {};
     for (const k of Object.keys(to)) {
@@ -359,7 +359,7 @@ function drawForPeriod(periodIndex) {
       marker.addTo(markersLayer);
 
       // Fade IN markers when they appear for this period
-      fadeInMarker(marker, marker.__baseStyle.fillOpacity, 1400);
+      fadeInMarker(marker, marker.__baseStyle.fillOpacity, 1000);
 
       // Routes from this location to each target
       for (const r of routes) {
@@ -395,7 +395,7 @@ async function applyPeriod(index) {
   updateActiveBand(idx);
 
   // Fade out current layers, then clear & draw new
-  await fadeOutLayers(markersLayer, routesLayer, 600);
+  await fadeOutLayers(markersLayer, routesLayer, 1000);
   drawForPeriod(idx);
 
   isTransitioning = false;
