@@ -5,9 +5,9 @@
 //   - data/periods.json  ({ periods: [...] })
 // Renders:
 //   - markers per object location
-//   - hover tooltip with thumbnail + minimal text
+//   - hover tooltips with thumbnails (clamped text via CSS)
 //   - click opens right panel with full details
-//   - routes (influence) from each location -> target, colored by inspiration
+//   - routes (influence) from each location -> target, colored by influence
 // ==============================
 
 const periodRange = document.getElementById("periodRange");
@@ -19,8 +19,11 @@ let map = null;
 let markersLayer = null;
 let routesLayer = null;
 
-let PERIODS = [];             // from data/periods.json
+let PERIODS = [];              // from data/periods.json
 let OBJECTS_BY_ID = new Map(); // from data/objects.json
+
+// Track the currently selected marker so we can keep it darker
+let selectedMarker = null;
 
 function setPanel(title, html) {
   panelTitle.textContent = title;
@@ -51,6 +54,7 @@ function initMap() {
 function clearLayers() {
   markersLayer.clearLayers();
   routesLayer.clearLayers();
+  selectedMarker = null;
 }
 
 function updateActiveBand(index) {
@@ -62,8 +66,8 @@ function updateActiveBand(index) {
 function updatePeriodUI(index) {
   const p = PERIODS[index];
   if (!p) return;
-  const start = p.yearStart ?? p.start ?? "";
-  const end = p.yearEnd ?? p.end ?? "";
+  const start = p.yearStart ?? "";
+  const end = p.yearEnd ?? "";
   periodValue.textContent = `${p.label} (${start}–${end})`;
 }
 
@@ -81,6 +85,37 @@ function categoryColor(category) {
   if (v === "commercial") return "#2f855a";   // green
   if (v === "conquer") return "#c53030";      // red-ish
   return "#0b4f6c";                           // fallback teal
+}
+
+// Marker visual states (bigger + brighter, then darker on hover/click)
+function markerStyleBase(color) {
+  return {
+    radius: 9,         // ✅ bigger
+    weight: 2,
+    color: color,
+    fillColor: color,
+    fillOpacity: 0.95  // ✅ brighter
+  };
+}
+
+function markerStyleHover(color) {
+  return {
+    radius: 10,        // slightly bigger on hover
+    weight: 3,
+    color: color,
+    fillColor: color,
+    fillOpacity: 1
+  };
+}
+
+function markerStyleSelected(color) {
+  return {
+    radius: 10,
+    weight: 4,
+    color: color,
+    fillColor: color,
+    fillOpacity: 1
+  };
 }
 
 // --- Hover tooltip HTML ---
@@ -169,12 +204,11 @@ async function loadData() {
   OBJECTS_BY_ID = new Map(objectsArr.map(o => [o.id, o]));
   PERIODS = periodsObj.periods;
 
-  // Keep slider in sync with periods length
+  // Keep slider in sync
   periodRange.min = "0";
   periodRange.max = String(Math.max(0, PERIODS.length - 1));
   if (!periodRange.value) periodRange.value = "0";
 
-  // If slider value exceeds max (after edits), clamp it
   const v = Number(periodRange.value);
   if (v > PERIODS.length - 1) periodRange.value = String(PERIODS.length - 1);
 }
@@ -196,47 +230,64 @@ function drawForPeriod(periodIndex) {
     return;
   }
 
-  // Render each object
   for (const id of objectIds) {
     const obj = OBJECTS_BY_ID.get(id);
     if (!obj) continue;
 
     const col = categoryColor(obj.category);
+    const baseStyle = markerStyleBase(col);
+    const hoverStyle = markerStyleHover(col);
+    const selectedStyle = markerStyleSelected(col);
+
     const locations = Array.isArray(obj.locations) ? obj.locations : [];
     const routes = Array.isArray(obj.routes) ? obj.routes : [];
 
-    // If object has no locations, skip (nothing to place)
     if (locations.length === 0) continue;
 
-    // For each location: marker + routes from that location
     for (const loc of locations) {
       if (loc?.lat == null || loc?.lng == null) continue;
 
-      const marker = L.circleMarker([Number(loc.lat), Number(loc.lng)], {
-        radius: 6,
-        weight: 2,
-        color: col,
-        fillColor: col,
-        fillOpacity: 0.9
-      });
+      const marker = L.circleMarker([Number(loc.lat), Number(loc.lng)], baseStyle);
 
-      // Hover tooltip with thumbnail
+      // Store styles on marker for easy toggling
+      marker.__baseStyle = baseStyle;
+      marker.__hoverStyle = hoverStyle;
+      marker.__selectedStyle = selectedStyle;
+
       marker.bindTooltip(buildHoverHTML(obj), {
         direction: "top",
-        offset: [0, -8],
+        offset: [0, -10],
         opacity: 1,
         className: "hover-tooltip",
         sticky: true
       });
 
-      // Click -> open panel
+      // Hover: darker/stronger
+      marker.on("mouseover", () => {
+        if (selectedMarker === marker) return; // selected stays selected style
+        marker.setStyle(marker.__hoverStyle);
+      });
+
+      marker.on("mouseout", () => {
+        if (selectedMarker === marker) return;
+        marker.setStyle(marker.__baseStyle);
+      });
+
+      // Click: select marker (stay circular, just darker/stronger)
       marker.on("click", () => {
+        // Unselect previous
+        if (selectedMarker && selectedMarker !== marker) {
+          selectedMarker.setStyle(selectedMarker.__baseStyle);
+        }
+        selectedMarker = marker;
+        marker.setStyle(marker.__selectedStyle);
+
         setPanel(obj.title || obj.id || "Object", buildPanelHTML(obj, period));
       });
 
       marker.addTo(markersLayer);
 
-      // Draw influence routes (from this location to each route target)
+      // Routes from this location to each target
       for (const r of routes) {
         if (r?.toLat == null || r?.toLng == null) continue;
 
@@ -246,17 +297,16 @@ function drawForPeriod(periodIndex) {
             color: routeColor(r.influence),
             weight: 3,
             opacity: 0.9,
-            dashArray: "6 8" // dashed (clear + elegant)
+            dashArray: "6 8"
           }
         ).addTo(routesLayer);
       }
     }
   }
 
-  // Default panel message (until user clicks a marker)
   setPanel(
     "Select an object",
-    `<p>Hover markers to preview (thumbnail + summary). Click a marker to see full details.</p>`
+    `<p>Hover markers to preview. Click a marker to see full details.</p>`
   );
 }
 
@@ -279,7 +329,6 @@ function wireBands() {
   document.querySelectorAll(".bands span").forEach((el) => {
     const activate = () => {
       const idx = Number(el.dataset.index);
-      // Only activate if idx is within loaded periods
       if (Number.isFinite(idx) && idx >= 0 && idx < PERIODS.length) {
         applyPeriod(idx);
       }
