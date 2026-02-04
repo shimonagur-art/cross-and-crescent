@@ -93,6 +93,11 @@ body {
 .legend__line--christianity{ border-top-color: #c53030; }
 .legend__line--islam{ border-top-color: #2f855a; }
 
+/* Centre the CCC row over the inspired-by row */
+.legend__row:first-child {
+  margin-right: 42px; /* fine-tune this value */
+}
+
 /* ================= Timeline ================= */
 
 .timeline { 
