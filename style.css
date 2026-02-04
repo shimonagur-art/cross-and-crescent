@@ -23,7 +23,7 @@ body {
   z-index: 10;
 }
 
-/* ✅ NEW: title left + legend right */
+/* ✅ title left + legend right */
 .headerTop{
   display: flex;
   align-items: flex-start;
@@ -42,17 +42,24 @@ body {
   font-size: 13px; 
 }
 
-/* ✅ NEW: Legend (top right, one line, no frame) */
+/* ✅ Legend: two rows (CCC on top, Inspired-by below) */
 .legend{
   display: flex;
-  align-items: center;
-  gap: 22px;
-  flex-wrap: wrap;            /* wraps nicely on small screens */
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;      /* keep it tight to top-right */
+  gap: 10px;
   margin-top: 2px;
   font-size: 14px;
   color: #111;
   white-space: nowrap;
+}
+
+.legend__row{
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: nowrap;          /* keep each row on ONE line */
+  justify-content: flex-end;
 }
 
 .legend__item{
@@ -61,16 +68,30 @@ body {
   gap: 10px;
 }
 
+/* Dots (CCC) */
 .legend__dot{
   width: 16px;
   height: 16px;
   border-radius: 999px;
   display: inline-block;
+  flex: 0 0 auto;
 }
 
 .legend__dot--culture{ background: #2b6cb0; }
 .legend__dot--commerce{ background: #2f855a; }
 .legend__dot--conquer{ background: #c53030; }
+
+/* Dashed lines (Inspired by) */
+.legend__line{
+  width: 40px;
+  height: 0;
+  border-top: 4px dashed;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.legend__line--christianity{ border-top-color: #c53030; }
+.legend__line--islam{ border-top-color: #2f855a; }
 
 /* ================= Timeline ================= */
 
@@ -313,11 +334,23 @@ body {
 
   /* ✅ keep legend neat on mobile */
   .legend{
-    gap: 14px;
+    gap: 8px;
     font-size: 13px;
   }
+
+  /* allow legend rows to wrap on small screens */
+  .legend__row{
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
   .legend__dot{
     width: 14px;
     height: 14px;
+  }
+
+  .legend__line{
+    width: 34px;
+    border-top-width: 3px;
   }
 }
