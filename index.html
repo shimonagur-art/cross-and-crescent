@@ -72,6 +72,23 @@
   <main class="layout">
     <section class="mapWrap">
       <div id="map" role="application" aria-label="Map showing artefact movement"></div>
+
+      <!-- NEW: Map legend (top-right overlay) -->
+      <div class="map-legend" aria-label="Map legend">
+        <span class="legend-item">
+          <span class="legend-dot culture" aria-hidden="true"></span>
+          Culture
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot commerce" aria-hidden="true"></span>
+          Commerce
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot conquer" aria-hidden="true"></span>
+          Conquer
+        </span>
+      </div>
+
       <p class="attribution">
         Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>.
       </p>
