@@ -324,59 +324,62 @@ body {
 
 /* ================= Legend ================= */
 
-.legend {
+/* ================= Legend ================= */
+
+.legend-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  max-width: 420px;
   font-size: 14px;
 }
 
 .legend-row {
   display: flex;
+  gap: 18px;
   align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 /* Marker dots */
 .legend-dot {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  display: inline-block;
+  flex-shrink: 0;
 }
 
 .legend-dot.culture {
-  background: #2b6cb0;
+  background-color: #2b6cb0;
 }
 
 .legend-dot.commerce {
-  background: #2f855a;
+  background-color: #2f855a;
 }
 
 .legend-dot.conquer {
-  background: #c53030;
+  background-color: #c53030;
 }
 
 /* Route lines */
 .legend-line {
-  width: 36px;
+  width: 34px;
   height: 0;
-  border-top-width: 3px;
-  border-top-style: dashed;
-  display: inline-block;
+  border-top: 3px dashed;
+  flex-shrink: 0;
 }
 
 .legend-line.christianity {
-  border-top-color: #c53030; /* red */
+  border-color: #c53030;
 }
 
 .legend-line.islam {
-  border-top-color: #2f855a; /* green */
+  border-color: #2f855a;
 }
-
-/* Slight visual separation */
-.legend-routes {
-  margin-top: 4px;
-}
-
