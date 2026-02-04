@@ -13,9 +13,27 @@
 </head>
 <body>
   <header class="header">
-    <div class="header__title">
-      <h1>Artefact Movement (1096–1350)</h1>
-      <p>Use the period slider to filter influence/movement events.</p>
+    <div class="headerTop">
+      <div class="header__title">
+        <h1>Artefact Movement (1096–1350)</h1>
+        <p>Use the period slider to filter influence/movement events.</p>
+      </div>
+
+      <!-- ✅ Legend in TOP RIGHT of the PAGE -->
+      <div class="legend" aria-label="Category key">
+        <span class="legend__item">
+          <span class="legend__dot legend__dot--culture" aria-hidden="true"></span>
+          Culture
+        </span>
+        <span class="legend__item">
+          <span class="legend__dot legend__dot--commerce" aria-hidden="true"></span>
+          Commerce
+        </span>
+        <span class="legend__item">
+          <span class="legend__dot legend__dot--conquer" aria-hidden="true"></span>
+          Conquer
+        </span>
+      </div>
     </div>
 
     <div class="timeline">
@@ -24,7 +42,6 @@
         <span id="periodValue">1st Crusade (1096–1099)</span>
       </label>
 
-      <!-- Discrete slider: 0..8 -->
       <input id="periodRange" type="range" min="0" max="8" value="0" step="1" />
 
       <div class="bands" role="list" aria-label="Crusade periods">
@@ -69,7 +86,6 @@
   </header>
 
   <main class="layout">
-    <!-- LEFT: Map -->
     <section class="mapWrap">
       <div id="map" role="application" aria-label="Map showing artefact movement"></div>
       <p class="attribution">
@@ -77,21 +93,12 @@
       </p>
     </section>
 
-    <!-- RIGHT: Legend + Panel (legend sits top-right, above the panel) -->
-    <section class="sideWrap" aria-label="Legend and selected artefact details">
-      <div class="legend" aria-label="Category colour key">
-        <span class="legend__item"><span class="legend__dot legend__dot--culture"></span>Culture</span>
-        <span class="legend__item"><span class="legend__dot legend__dot--commerce"></span>Commerce</span>
-        <span class="legend__item"><span class="legend__dot legend__dot--conquer"></span>Conquer</span>
+    <aside class="panel" aria-label="Selected artefact details">
+      <h2 id="panelTitle">Click a marker</h2>
+      <div id="panelBody" class="panelBody">
+        <p>Use the slider to change period. Markers/routes update. Click a marker to see details.</p>
       </div>
-
-      <aside class="panel" aria-label="Selected artefact details">
-        <h2 id="panelTitle">Click a marker</h2>
-        <div id="panelBody" class="panelBody">
-          <p>Use the slider to change period. Markers/routes update. Click a marker to see details.</p>
-        </div>
-      </aside>
-    </section>
+    </aside>
   </main>
 
   <script src="app.js"></script>
