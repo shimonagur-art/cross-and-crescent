@@ -115,6 +115,7 @@ body {
 
 .mapWrap { 
   min-height: 70vh; 
+  position: relative; /* ✅ needed so legend can sit over map */
 }
 
 #map { 
@@ -124,6 +125,41 @@ body {
   border: 1px solid #e6e6e6; 
   overflow: hidden; 
 }
+
+/* ================= Map Legend (top-right overlay) ================= */
+
+.map-legend {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  gap: 18px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #222;
+  pointer-events: none; /* doesn't block map interactions */
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.legend-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-block;
+  opacity: 0.9;
+}
+
+/* Match your marker colours */
+.legend-dot.culture { background: #2b6cb0; }   /* blue */
+.legend-dot.commerce { background: #2f855a; }  /* green */
+.legend-dot.conquer { background: #c53030; }   /* red */
 
 /* ================= Side Panel ================= */
 
@@ -273,5 +309,18 @@ body {
 
   .panel-images {
     grid-template-columns: 1fr;
+  }
+
+  /* Legend scales down a bit on mobile */
+  .map-legend {
+    font-size: 12px;
+    gap: 12px;
+    top: 10px;
+    right: 12px;
+  }
+
+  .legend-dot {
+    width: 12px;
+    height: 12px;
   }
 }
