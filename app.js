@@ -11,6 +11,7 @@
 // Adds:
 //   - Fade-out old period then fade-in new period (smooth transitions)
 //   - Route "wipe/crawl" draw animation with tiny stagger (PowerPoint-like)
+//     BUT: dashed during the crawl (no solid-then-dashed switch)
 // ==============================
 
 const periodRange = document.getElementById("periodRange");
@@ -209,6 +210,10 @@ function waitForSvgPath(layer, maxFrames = 40) {
   });
 }
 
+// IMPORTANT CHANGE:
+// Keep the route dashed DURING the crawl.
+// We do NOT replace strokeDasharray with `${length}` anymore.
+// Instead we keep the dotted pattern and animate dashOffset from "far away" to 0.
 async function animateRouteDraw(polyline, {
   durationMs = 900,
   delayMs = 0,
@@ -225,34 +230,30 @@ async function animateRouteDraw(polyline, {
 
   const length = path.getTotalLength();
 
-  // Remember your dashed style so we can restore it after the wipe
-  const prevDashArray = path.style.strokeDasharray;
-  const prevDashOffset = path.style.strokeDashoffset;
+  // Use the existing dash pattern if present, otherwise fall back to your chosen one
+  const dotted = path.style.strokeDasharray || "6 8";
+  path.style.strokeDasharray = dotted;
 
-  // Wipe reveal: start hidden then reveal to full
-  path.style.strokeDasharray = `${length}`;
-  path.style.strokeDashoffset = `${length}`;
+  // Start offset far enough so the dashed pattern begins off-screen and "slides" in
+  const startOffset = length + 200;
+  path.style.strokeDashoffset = `${startOffset}`;
 
   const start = performance.now();
 
   function frame(now) {
-    if (token !== renderToken) {
-      // Restore if cancelled
-      path.style.strokeDasharray = prevDashArray;
-      path.style.strokeDashoffset = prevDashOffset;
-      return;
-    }
+    if (token !== renderToken) return;
 
     const t = Math.min(1, (now - start) / durationMs);
     const e = easeLinear(t); // PowerPoint-like (linear)
-    const offset = length * (1 - e);
+
+    const offset = startOffset * (1 - e);
     path.style.strokeDashoffset = `${offset}`;
 
     if (t < 1) requestAnimationFrame(frame);
     else {
-      // Restore dashed pattern for the final steady state
-      path.style.strokeDasharray = prevDashArray;
-      path.style.strokeDashoffset = prevDashOffset;
+      // Final: exact dotted line in normal position
+      path.style.strokeDasharray = dotted;
+      path.style.strokeDashoffset = "0";
     }
   }
 
@@ -454,10 +455,10 @@ function drawForPeriod(periodIndex) {
           }
         ).addTo(routesLayer);
 
-        // PowerPoint-like wipe from source -> destination
+        // PowerPoint-like wipe from source -> destination (DASHED during the crawl)
         // Tiny stagger so multiple routes don't draw at exactly the same moment
         animateRouteDraw(routeLine, {
-          durationMs: 1500,        // route crawl speed (tweak here)
+          durationMs: 1500,          // route crawl speed (tweak here)
           delayMs: routeIndex * 200, // stagger (tweak here)
           token
         });
