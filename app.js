@@ -10,7 +10,7 @@
 //   - routes (influence) from each location -> target, colored by influence
 // Adds:
 //   - Fade-out old period then fade-in new period (smooth transitions)
-//   - Route "wipe/crawl" draw animation with tiny stagger (PowerPoint-like)
+//   - Route "crawl" animation (dashed during crawl, no judder)
 // ==============================
 
 const periodRange = document.getElementById("periodRange");
@@ -99,12 +99,12 @@ function categoryColor(category) {
 // Marker visual states (bigger; base semi-transparent; hover/selected opaque)
 function markerStyleBase(color) {
   return {
-    radius: 11,        // bigger
+    radius: 11,
     weight: 0,
     opacity: 0,
     color: color,
     fillColor: color,
-    fillOpacity: 0.65  // semi-transparent at rest
+    fillOpacity: 0.65
   };
 }
 
@@ -115,7 +115,7 @@ function markerStyleHover(color) {
     opacity: 0,
     color: color,
     fillColor: color,
-    fillOpacity: 0.95  // much more visible on hover
+    fillOpacity: 0.95
   };
 }
 
@@ -126,18 +126,15 @@ function markerStyleSelected(color) {
     opacity: 0,
     color: color,
     fillColor: color,
-    fillOpacity: 1     // fully opaque when selected
+    fillOpacity: 1
   };
 }
 
 // --- Fade helpers (for period transitions) ---
-function easeLinear(t) {
-  return t;
-}
+function easeLinear(t) { return t; }
 
 function animateStyle(layer, from, to, durationMs = 300, onDone) {
   const start = performance.now();
-
   function tick(now) {
     const t = Math.min(1, (now - start) / durationMs);
     const e = easeLinear(t);
@@ -148,17 +145,14 @@ function animateStyle(layer, from, to, durationMs = 300, onDone) {
       const b = to[k];
       cur[k] = a + (b - a) * e;
     }
-
     layer.setStyle(cur);
 
     if (t < 1) requestAnimationFrame(tick);
     else if (onDone) onDone();
   }
-
   requestAnimationFrame(tick);
 }
 
-// Fade out everything currently shown (markers + routes), then resolve
 function fadeOutLayers(markersLayer, routesLayer, durationMs = 220) {
   const markers = [];
   markersLayer.eachLayer(l => markers.push(l));
@@ -185,74 +179,41 @@ function fadeOutLayers(markersLayer, routesLayer, durationMs = 220) {
 }
 
 function fadeInMarker(marker, targetFillOpacity, durationMs = 450) {
-  // Start invisible (both stroke and fill)
   marker.setStyle({ fillOpacity: 0, opacity: 0 });
-
-  const from = { fillOpacity: 0, opacity: 0 };
-  const to = { fillOpacity: targetFillOpacity, opacity: 1 };
-  animateStyle(marker, from, to, durationMs);
+  animateStyle(marker, { fillOpacity: 0, opacity: 0 }, { fillOpacity: targetFillOpacity, opacity: 1 }, durationMs);
 }
 
-// ===== Route wipe/crawl animation (PowerPoint-like) =====
-// Wait for Leaflet to create the SVG path element
-function waitForSvgPath(layer, maxFrames = 40) {
-  return new Promise((resolve) => {
-    let frames = 0;
-    function tick() {
-      const path = layer && layer._path; // SVGPathElement when using SVG renderer
-      if (path) return resolve(path);
-      frames++;
-      if (frames >= maxFrames) return resolve(null);
-      requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-  });
-}
-
-async function animateRouteDraw(polyline, {
-  durationMs = 900,
+// ===== Dashed crawl animation WITHOUT dash-offset (no judder) =====
+// We animate the *end point* of the polyline from start -> destination.
+// Because the dash pattern is never animated, it stays smooth and dashed during the crawl.
+async function animateRouteCrawl(polyline, {
+  fromLatLng,
+  toLatLng,
+  durationMs = 1500,
   delayMs = 0,
   token
 } = {}) {
-  if (delayMs > 0) {
-    await new Promise(r => setTimeout(r, delayMs));
-  }
+  if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
   if (token !== renderToken) return;
-
-  const path = await waitForSvgPath(polyline);
-  if (!path) return;
-  if (token !== renderToken) return;
-
-  const length = path.getTotalLength();
-
-  // Remember your dashed style so we can restore it after the wipe
-  const prevDashArray = path.style.strokeDasharray;
-  const prevDashOffset = path.style.strokeDashoffset;
-
-  // Wipe reveal: start hidden then reveal to full
-  path.style.strokeDasharray = `${length}`;
-  path.style.strokeDashoffset = `${length}`;
 
   const start = performance.now();
 
   function frame(now) {
-    if (token !== renderToken) {
-      // Restore if cancelled
-      path.style.strokeDasharray = prevDashArray;
-      path.style.strokeDashoffset = prevDashOffset;
-      return;
-    }
+    if (token !== renderToken) return;
 
     const t = Math.min(1, (now - start) / durationMs);
-    const e = easeLinear(t); // PowerPoint-like (linear)
-    const offset = length * (1 - e);
-    path.style.strokeDashoffset = `${offset}`;
+    const e = easeLinear(t);
+
+    const lat = fromLatLng.lat + (toLatLng.lat - fromLatLng.lat) * e;
+    const lng = fromLatLng.lng + (toLatLng.lng - fromLatLng.lng) * e;
+
+    // Grow the line
+    polyline.setLatLngs([fromLatLng, L.latLng(lat, lng)]);
 
     if (t < 1) requestAnimationFrame(frame);
     else {
-      // Restore dashed pattern for the final steady state
-      path.style.strokeDasharray = prevDashArray;
-      path.style.strokeDashoffset = prevDashOffset;
+      // Ensure it ends exactly at the destination
+      polyline.setLatLngs([fromLatLng, toLatLng]);
     }
   }
 
@@ -263,8 +224,6 @@ async function animateRouteDraw(polyline, {
 function buildHoverHTML(obj) {
   const title = escapeHtml(obj?.title || obj?.id || "Object");
   const thumb = String(obj?.hover?.thumb || "").trim();
-
-  // Optional year if you have it in data (obj.hover.year OR obj.year)
   const yearRaw = obj?.hover?.year ?? obj?.year ?? "";
   const year = yearRaw ? escapeHtml(yearRaw) : "";
 
@@ -348,7 +307,6 @@ async function loadData() {
   OBJECTS_BY_ID = new Map(objectsArr.map(o => [o.id, o]));
   PERIODS = periodsObj.periods;
 
-  // Keep slider in sync
   periodRange.min = "0";
   periodRange.max = String(Math.max(0, PERIODS.length - 1));
   if (!periodRange.value) periodRange.value = "0";
@@ -361,12 +319,11 @@ async function loadData() {
 function drawForPeriod(periodIndex) {
   // Cancel previous animations and start a fresh "render token"
   renderToken++;
-
   const token = renderToken;
-  let routeIndex = 0; // for tiny stagger across all routes this render
+
+  let routeIndex = 0;
 
   const period = PERIODS[periodIndex];
-
   clearLayers();
 
   if (!period) {
@@ -399,8 +356,6 @@ function drawForPeriod(periodIndex) {
       if (loc?.lat == null || loc?.lng == null) continue;
 
       const marker = L.circleMarker([Number(loc.lat), Number(loc.lng)], baseStyle);
-
-      // Store styles on marker for toggling
       marker.__baseStyle = baseStyle;
       marker.__hoverStyle = hoverStyle;
       marker.__selectedStyle = selectedStyle;
@@ -413,7 +368,6 @@ function drawForPeriod(periodIndex) {
         sticky: true
       });
 
-      // Hover: stronger
       marker.on("mouseover", () => {
         if (selectedMarker === marker) return;
         marker.setStyle(marker.__hoverStyle);
@@ -424,41 +378,37 @@ function drawForPeriod(periodIndex) {
         marker.setStyle(marker.__baseStyle);
       });
 
-      // Click: select marker (stays circular, just stronger)
       marker.on("click", () => {
         if (selectedMarker && selectedMarker !== marker) {
           selectedMarker.setStyle(selectedMarker.__baseStyle);
         }
         selectedMarker = marker;
         marker.setStyle(marker.__selectedStyle);
-
         setPanel(obj.title || obj.id || "Object", buildPanelHTML(obj, period));
       });
 
       marker.addTo(markersLayer);
-
-      // Fade IN markers when they appear for this period (keep your current speed)
       fadeInMarker(marker, marker.__baseStyle.fillOpacity, 400);
 
-      // Routes from this location to each target (with wipe/crawl animation)
+      // Routes: create as "start->start" then crawl the endpoint to destination
       for (const r of routes) {
         if (r?.toLat == null || r?.toLng == null) continue;
 
-        const routeLine = L.polyline(
-          [[Number(loc.lat), Number(loc.lng)], [Number(r.toLat), Number(r.toLng)]],
-          {
-            color: routeColor(r.influence),
-            weight: 3,
-            opacity: 0.9,
-            dashArray: "6 8"
-          }
-        ).addTo(routesLayer);
+        const from = L.latLng(Number(loc.lat), Number(loc.lng));
+        const to = L.latLng(Number(r.toLat), Number(r.toLng));
 
-        // PowerPoint-like wipe from source -> destination
-        // Tiny stagger so multiple routes don't draw at exactly the same moment
-        animateRouteDraw(routeLine, {
-          durationMs: 1500,          // route crawl speed (tweak here)
-          delayMs: routeIndex * 200, // stagger (tweak here)
+        const routeLine = L.polyline([from, from], {
+          color: routeColor(r.influence),
+          weight: 3,
+          opacity: 0.9,
+          dashArray: "6 8"
+        }).addTo(routesLayer);
+
+        animateRouteCrawl(routeLine, {
+          fromLatLng: from,
+          toLatLng: to,
+          durationMs: 1500,           // crawl speed (tweak)
+          delayMs: routeIndex * 200,  // stagger (tweak)
           token
         });
 
@@ -467,13 +417,9 @@ function drawForPeriod(periodIndex) {
     }
   }
 
-  setPanel(
-    "Select an object",
-    `<p>Hover markers to preview. Click a marker to see full details.</p>`
-  );
+  setPanel("Select an object", `<p>Hover markers to preview. Click a marker to see full details.</p>`);
 }
 
-// Fade-out current, then draw new period (fade-in happens per marker)
 async function applyPeriod(index) {
   if (isTransitioning) return;
   isTransitioning = true;
@@ -483,14 +429,12 @@ async function applyPeriod(index) {
   updatePeriodUI(idx);
   updateActiveBand(idx);
 
-  // Fade out current layers, then clear & draw new (keep your current speed)
   await fadeOutLayers(markersLayer, routesLayer, 400);
   drawForPeriod(idx);
 
   isTransitioning = false;
 }
 
-// --- Controls wiring ---
 function wireControls() {
   periodRange.addEventListener("input", (e) => {
     applyPeriod(Number(e.target.value));
@@ -517,7 +461,6 @@ function wireBands() {
   });
 }
 
-// --- Main ---
 (async function main() {
   initMap();
   wireControls();
@@ -525,7 +468,7 @@ function wireBands() {
 
   try {
     await loadData();
-    await applyPeriod(Number(periodRange.value)); // wait for initial fade-in
+    await applyPeriod(Number(periodRange.value));
   } catch (err) {
     setPanel("Error", `<p>${escapeHtml(err.message)}</p>`);
     console.error(err);
