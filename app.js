@@ -10,6 +10,7 @@
 //   - routes (influence) from each location -> target, colored by influence
 // Adds:
 //   - Fade-out old period then fade-in new period (smooth transitions)
+//   - Route "wipe/crawl" draw animation with tiny stagger (PowerPoint-like)
 // ==============================
 
 const periodRange = document.getElementById("periodRange");
@@ -29,6 +30,9 @@ let selectedMarker = null;
 
 // Prevent spamming transitions when dragging slider fast
 let isTransitioning = false;
+
+// Cancels any in-flight route animations when period changes
+let renderToken = 0;
 
 function setPanel(title, html) {
   panelTitle.textContent = title;
@@ -189,6 +193,72 @@ function fadeInMarker(marker, targetFillOpacity, durationMs = 450) {
   animateStyle(marker, from, to, durationMs);
 }
 
+// ===== Route wipe/crawl animation (PowerPoint-like) =====
+// Wait for Leaflet to create the SVG path element
+function waitForSvgPath(layer, maxFrames = 40) {
+  return new Promise((resolve) => {
+    let frames = 0;
+    function tick() {
+      const path = layer && layer._path; // SVGPathElement when using SVG renderer
+      if (path) return resolve(path);
+      frames++;
+      if (frames >= maxFrames) return resolve(null);
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+async function animateRouteDraw(polyline, {
+  durationMs = 900,
+  delayMs = 0,
+  token
+} = {}) {
+  if (delayMs > 0) {
+    await new Promise(r => setTimeout(r, delayMs));
+  }
+  if (token !== renderToken) return;
+
+  const path = await waitForSvgPath(polyline);
+  if (!path) return;
+  if (token !== renderToken) return;
+
+  const length = path.getTotalLength();
+
+  // Remember your dashed style so we can restore it after the wipe
+  const prevDashArray = path.style.strokeDasharray;
+  const prevDashOffset = path.style.strokeDashoffset;
+
+  // Wipe reveal: start hidden then reveal to full
+  path.style.strokeDasharray = `${length}`;
+  path.style.strokeDashoffset = `${length}`;
+
+  const start = performance.now();
+
+  function frame(now) {
+    if (token !== renderToken) {
+      // Restore if cancelled
+      path.style.strokeDasharray = prevDashArray;
+      path.style.strokeDashoffset = prevDashOffset;
+      return;
+    }
+
+    const t = Math.min(1, (now - start) / durationMs);
+    const e = easeLinear(t); // PowerPoint-like (linear)
+    const offset = length * (1 - e);
+    path.style.strokeDashoffset = `${offset}`;
+
+    if (t < 1) requestAnimationFrame(frame);
+    else {
+      // Restore dashed pattern for the final steady state
+      path.style.strokeDasharray = prevDashArray;
+      path.style.strokeDashoffset = prevDashOffset;
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
+
 // --- Hover tooltip HTML (minimal) ---
 function buildHoverHTML(obj) {
   const title = escapeHtml(obj?.title || obj?.id || "Object");
@@ -289,6 +359,12 @@ async function loadData() {
 
 // --- Render for a period index ---
 function drawForPeriod(periodIndex) {
+  // Cancel previous animations and start a fresh "render token"
+  renderToken++;
+
+  const token = renderToken;
+  let routeIndex = 0; // for tiny stagger across all routes this render
+
   const period = PERIODS[periodIndex];
 
   clearLayers();
@@ -361,14 +437,14 @@ function drawForPeriod(periodIndex) {
 
       marker.addTo(markersLayer);
 
-      // Fade IN markers when they appear for this period
+      // Fade IN markers when they appear for this period (keep your current speed)
       fadeInMarker(marker, marker.__baseStyle.fillOpacity, 400);
 
-      // Routes from this location to each target
+      // Routes from this location to each target (with wipe/crawl animation)
       for (const r of routes) {
         if (r?.toLat == null || r?.toLng == null) continue;
 
-        L.polyline(
+        const routeLine = L.polyline(
           [[Number(loc.lat), Number(loc.lng)], [Number(r.toLat), Number(r.toLng)]],
           {
             color: routeColor(r.influence),
@@ -377,6 +453,16 @@ function drawForPeriod(periodIndex) {
             dashArray: "6 8"
           }
         ).addTo(routesLayer);
+
+        // PowerPoint-like wipe from source -> destination
+        // Tiny stagger so multiple routes don't draw at exactly the same moment
+        animateRouteDraw(routeLine, {
+          durationMs: 1500,        // route crawl speed (tweak here)
+          delayMs: routeIndex * 200, // stagger (tweak here)
+          token
+        });
+
+        routeIndex++;
       }
     }
   }
@@ -397,7 +483,7 @@ async function applyPeriod(index) {
   updatePeriodUI(idx);
   updateActiveBand(idx);
 
-  // Fade out current layers, then clear & draw new
+  // Fade out current layers, then clear & draw new (keep your current speed)
   await fadeOutLayers(markersLayer, routesLayer, 400);
   drawForPeriod(idx);
 
