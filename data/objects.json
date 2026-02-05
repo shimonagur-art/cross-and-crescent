@@ -96,8 +96,8 @@
   {
     "id": "obj_005",
     "title": "Tiles",
-    "category": "conquer",
-    "tags": ["conquer", "england"],
+    "category": "conquest",
+    "tags": ["conquest", "england"],
     "hover": {
       "thumb": "images/objects/obj_005/005thumb.jpg",
       "text": "Tiles showing Richard and Saladin"
