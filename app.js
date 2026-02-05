@@ -92,7 +92,7 @@ function categoryColor(category) {
   const v = String(category || "").trim().toLowerCase();
   if (v === "cultural") return "#2b6cb0";     // blue
   if (v === "commercial") return "#2f855a";   // green
-  if (v === "conquer") return "#c53030";      // red-ish
+  if (v === "Conquest") return "#c53030";      // red-ish
   return "#0b4f6c";                           // fallback teal
 }
 
