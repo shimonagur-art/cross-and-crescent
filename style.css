@@ -79,7 +79,7 @@ body {
 
 .legend__dot--culture{ background: #2b6cb0; }
 .legend__dot--commerce{ background: #2f855a; }
-.legend__dot--conquer{ background: #c53030; }
+.legend__dot--conquest{ background: #c53030; }
 
 /* Dashed lines (Inspired by) */
 .legend__line{
